@@ -328,7 +328,17 @@ function importResultsFromFile(file) {
 
 async function loadLatestFromServer() {
   try {
-    const res = await fetch("results.json", { cache: "no-store" });
+    // Bust browser + GitHub-Pages CDN caches: a unique URL per request can't
+    // be served from cache. Without this, mobile browsers (especially Safari)
+    // keep serving the old results.json even after a fresh deploy.
+    const bust = Date.now();
+    const res = await fetch(`results.json?t=${bust}`, {
+      cache: "no-store",
+      headers: {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+      },
+    });
     if (!res.ok) throw new Error("results.json not found (HTTP " + res.status + ")");
     const data = await res.json();
     if (!data || typeof data !== "object") throw new Error("Invalid file");
