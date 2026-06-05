@@ -750,22 +750,43 @@ function getKnockoutAssignments() {
   );
   const top8 = thirds.slice(0, 8);
 
-  // Greedy assignment of the 8 qualifying third-placers to R32 slots.
-  // Each "3rd X/Y/Z/..." slot has a candidate-group list; we pick the
-  // best-ranked qualifying team whose group is in the list.
+  // Assign the 8 qualifying third-placers to R32 slots. When the official
+  // FIFA matrix (495-row lookup) is loaded, use it for an exact match to
+  // FIFA's published bracket. Otherwise fall back to a greedy assignment.
   const thirdsAssignments = {};
   if (complete) {
-    const used = new Set();
-    for (const m of FIXTURES) {
-      if (m.stage !== "r32") continue;
-      for (const pos of [1, 2]) {
-        const ph = pos === 1 ? m.team1 : m.team2;
-        if (!ph.startsWith("3rd ")) continue;
-        const candidates = ph.replace("3rd ", "").split("/");
-        const pick = top8.find(t => !used.has(t.team) && candidates.includes(t.group));
-        if (pick) {
-          thirdsAssignments[`${matchId(m)}:${pos}`] = pick;
-          used.add(pick.team);
+    const matrixLookup = (typeof lookupFifaThirdPlaceMatrix === "function")
+      ? lookupFifaThirdPlaceMatrix(top8.map(t => t.group))
+      : null;
+
+    if (matrixLookup) {
+      // Official FIFA matrix: each Winner letter maps to the 3rd-of-X group letter.
+      const groupToTeam = {};
+      for (const t of top8) groupToTeam[t.group] = t;
+      for (const m of FIXTURES) {
+        if (m.stage !== "r32") continue;
+        const winMatch = m.team1.match(/^Winner ([A-L])$/);
+        if (!winMatch) continue;
+        const winnerLetter = winMatch[1];
+        const thirdGroup = matrixLookup[winnerLetter];
+        if (!thirdGroup) continue;
+        const teamInfo = groupToTeam[thirdGroup];
+        if (teamInfo) thirdsAssignments[`${matchId(m)}:2`] = teamInfo;
+      }
+    } else {
+      // Fallback: greedy assignment respecting candidate-group constraints.
+      const used = new Set();
+      for (const m of FIXTURES) {
+        if (m.stage !== "r32") continue;
+        for (const pos of [1, 2]) {
+          const ph = pos === 1 ? m.team1 : m.team2;
+          if (!ph.startsWith("3rd ")) continue;
+          const candidates = ph.replace("3rd ", "").split("/");
+          const pick = top8.find(t => !used.has(t.team) && candidates.includes(t.group));
+          if (pick) {
+            thirdsAssignments[`${matchId(m)}:${pos}`] = pick;
+            used.add(pick.team);
+          }
         }
       }
     }
