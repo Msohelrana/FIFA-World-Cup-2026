@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIFA World Cup 2026 — Fixtures</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <header class="hero">
+    <button id="adminBtn" type="button" class="admin-btn hero-admin-btn">🔒 Admin</button>
+    <div class="hero-inner">
+      <div class="hero-flex">
+        <!-- 👇  PASTE YOUR LOGO URL BETWEEN THE QUOTES BELOW  👇 -->
+        <img class="wc-logo"
+          src="https://upload.wikimedia.org/wikipedia/en/thumb/1/17/2026_FIFA_World_Cup_emblem.svg/250px-2026_FIFA_World_Cup_emblem.svg.png"
+          alt="World Cup 2026 logo">
+        <!-- 👆  PASTE YOUR LOGO URL ABOVE                       👆 -->
+        <div class="hero-text">
+          <p class="kicker">USA · Canada · Mexico</p>
+          <h1>FIFA World Cup 2026</h1>
+          <p class="dates">11 June – 19 July 2026 · 48 teams · 104 matches</p>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="controls">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="teamSelect">Team</label>
+          <select id="teamSelect">
+            <option value="">All teams</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="dateSelect">Date</label>
+          <select id="dateSelect">
+            <option value="">All dates</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label for="tzSelect">Time zone</label>
+          <select id="tzSelect"></select>
+        </div>
+        <button id="clearBtn" type="button">Reset</button>
+      </div>
+      <div class="view-toggle" role="tablist" aria-label="View mode">
+        <button class="tab active" data-view="schedule" role="tab" aria-selected="true">Schedule</button>
+        <button class="tab" data-view="groups" role="tab" aria-selected="false">Groups</button>
+        <button class="tab" data-view="standings" role="tab" aria-selected="false">Standings</button>
+        <button class="tab" data-view="bracket" role="tab" aria-selected="false">Bracket</button>
+      </div>
+    </section>
+
+    <section id="summary" class="summary" hidden></section>
+
+    <section id="groupsView" class="groups-view" hidden></section>
+
+    <section id="standingsView" class="standings-view" hidden></section>
+
+    <section id="bracketView" class="bracket-view" hidden></section>
+
+    <section id="scheduleView" class="schedule-view"></section>
+  </main>
+
+  <footer>
+    <p>Fixture data from public sources.Knockout matches will be updated as teams qualify.</p>
+  </footer>
+
+  <script src="fixtures.js"></script>
+  <script src="app.js"></script>
+</body>
+
+</html>
