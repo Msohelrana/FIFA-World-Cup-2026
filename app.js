@@ -1304,14 +1304,12 @@ render();
 // Admins keep their local edits across reloads (otherwise unpushed work would
 // be lost every refresh). The admin can click "Load latest from server" to
 // pull manually when they want.
-const shouldAutoFetch = !state.isAdmin
-  || (Object.keys(state.results).length === 0 &&
-    Object.keys(state.standingsOverride).length === 0);
-if (shouldAutoFetch) {
-  loadLatestFromServer().then(payload => {
-    if (payload && !payload.__error && Object.keys(payload.results).length > 0) {
-      applyServerData(payload);
-      rerenderActive();
-    }
-  });
-}
+// Always fetch results.json on every page load — the file in the project
+// folder is the single source of truth for every user (admin included).
+// Admins should Export and save the file before reloading to keep their edits.
+loadLatestFromServer().then(payload => {
+  if (payload && !payload.__error && Object.keys(payload.results).length > 0) {
+    applyServerData(payload);
+    rerenderActive();
+  }
+});
