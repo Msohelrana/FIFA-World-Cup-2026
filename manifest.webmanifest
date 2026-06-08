@@ -1,0 +1,27 @@
+{
+  "name": "FIFA World Cup 2026",
+  "short_name": "WC 2026",
+  "description": "Live FIFA World Cup 2026 fixtures, scores, standings, knockout bracket, top scorers, and predictions.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1020",
+  "theme_color": "#0b1020",
+  "categories": ["sports", "entertainment"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "./icon.png",
+      "sizes": "250x386",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

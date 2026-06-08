@@ -59,8 +59,11 @@ const state = {
   results: loadResults(),
   standingsOverride: loadStandingsOverride(),
   prediction: loadPrediction(),
+  sharedPrediction: null,        // set when viewing someone else's shared link (read-only)
   isAdmin: localStorage.getItem(ADMIN_KEY) === "1",
 };
+
+function isViewingShared() { return !!state.sharedPrediction; }
 
 function loadPrediction() {
   try {
@@ -518,6 +521,41 @@ function flagFor(name) {
   return `<img class="flag-img" src="${src}" alt="${name} flag" loading="lazy">`;
 }
 
+// --- Live countdown / LIVE state ---
+// LIVE window: group matches are always done within ~110 min real time.
+// Knockout matches can run an extra 30 min (extra time) + ~15 min (penalties),
+// so give them more headroom before the LIVE chip auto-disappears.
+// No minute counter — we can't honestly track stoppage / extra time without a
+// real referee feed, so the chip is just "LIVE" + red glow on the card.
+const LIVE_DURATION_GROUP_MS = 2 * 60 * 60 * 1000;          // 120 min
+const LIVE_DURATION_KO_MS    = 2 * 60 * 60 * 1000 + 45 * 60 * 1000; // 165 min
+
+function formatCountdown(m, nowMs = Date.now()) {
+  // m can be a fixture object or just a kickoff timestamp number (back-compat)
+  const utcMs = typeof m === "number" ? m : fixtureToUTC(m).getTime();
+  const isKnockout = typeof m === "object" && m.stage && m.stage !== "group";
+  const liveWindow = isKnockout ? LIVE_DURATION_KO_MS : LIVE_DURATION_GROUP_MS;
+  const diff = utcMs - nowMs;
+
+  if (diff > 0) {
+    const totalMin = Math.floor(diff / 60000);
+    const days = Math.floor(totalMin / 1440);
+    const hours = Math.floor((totalMin % 1440) / 60);
+    const minutes = totalMin % 60;
+    let text;
+    if (days >= 2) text = `in ${days}d ${hours}h`;
+    else if (days === 1) text = `in 1d ${hours}h`;
+    else if (hours > 0) text = `in ${hours}h ${minutes}m`;
+    else if (minutes > 0) text = `in ${minutes} min`;
+    else text = "starting soon";
+    return { state: "upcoming", text: `⏰ ${text}` };
+  }
+  if (-diff < liveWindow) {
+    return { state: "live", text: "🔴 LIVE" };
+  }
+  return { state: "ended", text: "" };
+}
+
 // --- Renderers ---
 function renderMatchCard(m, highlightTeam, ko) {
   const stageLabel = STAGE_LABELS[m.stage] + (m.group ? ` · Group ${m.group}` : "");
@@ -530,9 +568,17 @@ function renderMatchCard(m, highlightTeam, ko) {
   const displayTeam2 = resolved2 || m.team2;
   const teamsKnown = resolved1 && resolved2;
 
+  const kickoffUtcMs = fixtureToUTC(m).getTime();
   const localTime = formatTimeInTz(fixtureToUTC(m), state.selectedTz);
   const stageBadge = `<span class="stage-badge ${m.stage}">${stageLabel}</span>`;
-  const meta = `<div class="match-meta">${stageBadge}<span>${localTime}</span></div>`;
+  const cd = formatCountdown(m);
+  const countdownChip = cd.state === "ended"
+    ? ""
+    : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
+  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${localTime}</span>${countdownChip}</div>`;
+  if (cd.state === "live") card.classList.add("is-live");
+  card.dataset.kickoff = String(kickoffUtcMs);
+  card.dataset.stage = m.stage;       // ticker uses this to pick the right LIVE window
 
   const t1Class = highlightTeam && displayTeam1 === highlightTeam ? "team highlight" : "team";
   const t2Class = highlightTeam && displayTeam2 === highlightTeam ? "team right highlight" : "team right";
@@ -1565,6 +1611,18 @@ function getMatchesInBracketOrder(stage) {
   return order.map(i => matches[i]).filter(Boolean);
 }
 
+// ===== Prediction lock helpers =====
+// Predictions lock once real-world matches have started, so users can't update
+// their picks after seeing actual results.
+function isMatchLocked(m, nowMs = Date.now()) {
+  return fixtureToUTC(m).getTime() <= nowMs;
+}
+function isGroupLocked(letter, nowMs = Date.now()) {
+  return FIXTURES.some(m =>
+    m.stage === "group" && m.group === letter && fixtureToUTC(m).getTime() <= nowMs
+  );
+}
+
 // ===== Prediction Mode =====
 function getPredictedGroupOrder(letter) {
   const stored = state.prediction.groupOrder[letter];
@@ -1704,39 +1762,260 @@ function clearAllPredictions() {
   savePrediction();
 }
 
+// ===== Shareable prediction link =====
+// Encode shape: "v1.<48-digit group orders>.<thirds letters>.<32-digit KO winners>"
+//   - groups: 4 digits per group A→L, each a 0-3 index into GROUPS[letter]
+//   - thirds: 0-12 letters (groups whose 3rd-place team the user picked as best-8)
+//   - KO:     1 digit per KO match in FIXTURES order — 0=no pick, 1=team1, 2=team2
+// Total: ~92 chars worst case. Easy to text/share.
+function encodePrediction(pred) {
+  const letters = Object.keys(GROUPS).sort();
+
+  // Group orders → 48 digits
+  const groupStr = letters.map(letter => {
+    const teams = GROUPS[letter];
+    const userOrder = (pred.groupOrder && pred.groupOrder[letter]) || teams;
+    const valid = userOrder.length === teams.length
+      && userOrder.every(t => teams.includes(t))
+      && new Set(userOrder).size === teams.length;
+    if (!valid) return "0123";
+    return userOrder.map(t => teams.indexOf(t)).join("");
+  }).join("");
+
+  // Thirds → group letters (sorted, dedup)
+  const teamToGroup = {};
+  for (const letter of letters) {
+    const order = (pred.groupOrder && pred.groupOrder[letter]) || GROUPS[letter];
+    if (order[2]) teamToGroup[order[2]] = letter;
+  }
+  const thirdsStr = [...new Set((pred.bestThirds || []).map(t => teamToGroup[t]).filter(Boolean))]
+    .sort().join("");
+
+  // KO winners → 0/1/2 per match. Use temporary state.prediction swap so
+  // predictResolveMatchTeams resolves against the prediction we're encoding,
+  // not the user's live state.
+  const koMatches = FIXTURES.filter(m => m.stage !== "group");
+  let koStr = "";
+  const saved = state.prediction;
+  state.prediction = pred;
+  try {
+    const predKo = buildPredictionKo();
+    for (const m of koMatches) {
+      const winner = (pred.koWinners || {})[matchId(m)];
+      if (!winner) { koStr += "0"; continue; }
+      const { team1, team2 } = predictResolveMatchTeams(m, predKo);
+      koStr += winner === team1 ? "1" : winner === team2 ? "2" : "0";
+    }
+  } finally {
+    state.prediction = saved;
+  }
+
+  return `v1.${groupStr}.${thirdsStr}.${koStr}`;
+}
+
+function decodePrediction(str) {
+  if (!str || !str.startsWith("v1.")) return null;
+  const parts = str.slice(3).split(".");
+  if (parts.length !== 3) return null;
+  const [groupStr, thirdsStr, koStr] = parts;
+
+  const letters = Object.keys(GROUPS).sort();
+  if (groupStr.length !== letters.length * 4) return null;
+
+  // Group orders
+  const groupOrder = {};
+  for (let i = 0; i < letters.length; i++) {
+    const letter = letters[i];
+    const teams = GROUPS[letter];
+    const segment = groupStr.slice(i * 4, (i + 1) * 4);
+    const indices = segment.split("").map(c => parseInt(c, 10));
+    if (indices.some(n => isNaN(n) || n < 0 || n >= teams.length)) return null;
+    if (new Set(indices).size !== teams.length) return null; // must be a permutation
+    groupOrder[letter] = indices.map(idx => teams[idx]);
+  }
+
+  // Thirds — derive team names from the decoded group orders
+  const bestThirds = [];
+  for (const c of thirdsStr) {
+    if (!GROUPS[c]) continue;
+    const team = groupOrder[c] && groupOrder[c][2];
+    if (team && !bestThirds.includes(team)) bestThirds.push(team);
+  }
+
+  // KO winners — resolve teams progressively using the in-progress prediction
+  const koMatches = FIXTURES.filter(m => m.stage !== "group");
+  if (koStr.length !== koMatches.length) return null;
+
+  const decoded = { groupOrder, bestThirds, koWinners: {} };
+  const saved = state.prediction;
+  state.prediction = decoded;
+  try {
+    for (let i = 0; i < koMatches.length; i++) {
+      const code = koStr[i];
+      if (code !== "1" && code !== "2") continue;
+      const m = koMatches[i];
+      const predKo = buildPredictionKo();
+      const { team1, team2 } = predictResolveMatchTeams(m, predKo);
+      const winner = code === "1" ? team1 : team2;
+      if (winner) decoded.koWinners[matchId(m)] = winner;
+    }
+  } finally {
+    state.prediction = saved;
+  }
+
+  return decoded;
+}
+
 // ----- Render -----
 function renderPredict() {
   const view = els.predictView;
   view.innerHTML = "";
+  const viewingShared = isViewingShared();
+
+  // VIEW-ONLY mode for a shared prediction: show a banner with Save/Discard actions,
+  // render everything else using the shared prediction (via a synchronous swap), and
+  // skip attaching any edit handlers so the user's own picks stay safe.
+  if (viewingShared) {
+    const banner = document.createElement("div");
+    banner.className = "predict-shared-banner";
+    banner.innerHTML = `
+      <div class="predict-shared-text">
+        <strong>🔗 Viewing a shared prediction.</strong>
+        Your own picks are still saved. Tap <em>Save as mine</em> to keep this instead, or <em>Back to mine</em> to discard.
+      </div>
+      <div class="predict-shared-actions">
+        <button type="button" id="sharedSaveBtn" class="action-btn">Save as mine</button>
+        <button type="button" id="sharedBackBtn" class="danger-btn">Back to mine</button>
+      </div>
+    `;
+    view.appendChild(banner);
+    banner.querySelector("#sharedSaveBtn").addEventListener("click", async () => {
+      const ok = await showConfirm(
+        "Save this shared prediction as your own? Your current picks will be replaced.",
+        { title: "Save shared prediction?", icon: "🔗", iconType: "info", confirmLabel: "Save as mine" }
+      );
+      if (!ok) return;
+      // Deep-copy so future shared edits don't mutate user's state
+      state.prediction = JSON.parse(JSON.stringify(state.sharedPrediction));
+      savePrediction();
+      state.sharedPrediction = null;
+      renderPredict();
+    });
+    banner.querySelector("#sharedBackBtn").addEventListener("click", () => {
+      state.sharedPrediction = null;
+      renderPredict();
+    });
+  }
 
   const header = document.createElement("div");
   header.className = "predict-header";
   header.innerHTML = `
-    <p>Pick your full World Cup prediction. All choices save automatically to this browser only.</p>
+    <p>${viewingShared
+        ? "You're viewing a friend's picks (read-only). Use the banner above to save them or return to your own."
+        : "Pick your full World Cup prediction. All choices save automatically to this browser only."
+      }</p>
     <div class="predict-header-actions">
+      <button type="button" id="predictShareBtn" class="action-btn" ${viewingShared ? "disabled" : ""}>🔗 Share link</button>
       <button type="button" id="predictSaveImgBtn" class="action-btn">📷 Save image</button>
       <button type="button" id="predictSavePdfBtn" class="action-btn">📄 Save PDF</button>
-      <button type="button" id="predictResetBtn" class="danger-btn">Reset all</button>
+      <button type="button" id="predictResetBtn" class="danger-btn" ${viewingShared ? "disabled" : ""}>Reset all</button>
     </div>
   `;
   view.appendChild(header);
-  header.querySelector("#predictResetBtn").addEventListener("click", async () => {
-    const ok = await showConfirm("Clear all your group standings, third-place picks, and bracket choices?", {
-      title: "Reset predictions",
-      icon: "♻",
-      confirmLabel: "Reset",
-      danger: true,
+  if (!viewingShared) {
+    header.querySelector("#predictResetBtn").addEventListener("click", async () => {
+      const ok = await showConfirm("Clear all your group standings, third-place picks, and bracket choices?", {
+        title: "Reset predictions",
+        icon: "♻",
+        confirmLabel: "Reset",
+        danger: true,
+      });
+      if (!ok) return;
+      clearAllPredictions();
+      renderPredict();
     });
-    if (!ok) return;
-    clearAllPredictions();
-    renderPredict();
-  });
+    header.querySelector("#predictShareBtn").addEventListener("click", () => sharePredictionLink());
+  }
   header.querySelector("#predictSaveImgBtn").addEventListener("click", (e) => downloadPrediction("png", e.currentTarget));
   header.querySelector("#predictSavePdfBtn").addEventListener("click", (e) => downloadPrediction("pdf", e.currentTarget));
 
-  view.appendChild(renderPredictGroupsSection());
-  view.appendChild(renderPredictThirdsSection());
-  view.appendChild(renderPredictBracketSection());
+  // Sub-renders read state.prediction. Swap it to the shared one for the duration
+  // of this synchronous render, then restore — so the rendered DOM reflects the
+  // shared prediction without ever mutating the user's saved state.
+  const savedOwn = state.prediction;
+  if (viewingShared) state.prediction = state.sharedPrediction;
+  try {
+    view.appendChild(renderPredictGroupsSection());
+    view.appendChild(renderPredictThirdsSection());
+    view.appendChild(renderPredictBracketSection());
+  } finally {
+    state.prediction = savedOwn;
+  }
+}
+
+async function sharePredictionLink() {
+  const encoded = encodePrediction(state.prediction);
+  // Strip any existing hash before appending the new one
+  const baseUrl = `${location.origin}${location.pathname}${location.search}`;
+  const url = `${baseUrl}#pred=${encoded}`;
+
+  // Try modern clipboard API first; needs HTTPS + user gesture (we have both)
+  let copied = false;
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(url);
+      copied = true;
+    }
+  } catch { /* fall through to manual copy modal */ }
+
+  const message = copied
+    ? "Link copied to your clipboard. Paste it in any chat or email — recipients see your exact picks when they open it."
+    : "Copy the link below and share it. Recipients see your exact picks when they open it.";
+
+  // Show a modal with the URL so the user can verify (or copy manually if clipboard failed)
+  const existing = document.getElementById("shareModal");
+  if (existing) existing.remove();
+  const modal = document.createElement("div");
+  modal.id = "shareModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-icon modal-icon-info">🔗</div>
+      <h2>${copied ? "Link copied!" : "Share this link"}</h2>
+      <p class="modal-subtitle">${message}</p>
+      <input type="text" class="modal-input" id="shareUrlInput" readonly value="${url.replace(/"/g, "&quot;")}">
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-ghost" id="shareCloseBtn" type="button">Close</button>
+        <button class="modal-btn modal-btn-primary" id="shareCopyBtn" type="button">${copied ? "Copy again" : "Copy"}</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+  const urlInput = modal.querySelector("#shareUrlInput");
+  urlInput.addEventListener("focus", () => urlInput.select());
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector("#shareCloseBtn").addEventListener("click", close);
+  modal.querySelector("#shareCopyBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      modal.querySelector("h2").textContent = "Link copied!";
+    } catch {
+      urlInput.focus();
+      urlInput.select();
+      document.execCommand && document.execCommand("copy");
+    }
+  });
+  // Auto-select the URL after a tick so user can ctrl-c immediately
+  setTimeout(() => urlInput.select(), 80);
 }
 
 // Lazy-load a CDN script; resolves once it's available globally.
@@ -1844,8 +2123,11 @@ function renderPredictGroupsSection() {
     const card = document.createElement("div");
     card.className = "predict-group-card";
     const order = getPredictedGroupOrder(letter);
+    const locked = isGroupLocked(letter) || isViewingShared();
+    if (locked) card.classList.add("is-locked");
+    const lockBadge = (isGroupLocked(letter)) ? `<span class="predict-lock-badge" title="Locked — group matches have started">🔒 Locked</span>` : "";
     card.innerHTML = `
-      <h3>Group ${letter}</h3>
+      <h3>Group ${letter}${lockBadge}</h3>
       <ol class="predict-group-list">
         ${order.map((team, idx) => `
           <li class="predict-team-row ${idx < 2 ? "qualify" : idx === 2 ? "third" : "out"}">
@@ -1853,27 +2135,31 @@ function renderPredictGroupsSection() {
             <span class="flag">${flagFor(team)}</span>
             <span class="predict-team-name">${escapeHTML(team)}</span>
             <span class="predict-move">
-              <button type="button" class="predict-move-btn" data-dir="up" data-team="${escapeHTML(team)}" ${idx === 0 ? "disabled" : ""} aria-label="Move ${escapeHTML(team)} up">▲</button>
-              <button type="button" class="predict-move-btn" data-dir="down" data-team="${escapeHTML(team)}" ${idx === order.length - 1 ? "disabled" : ""} aria-label="Move ${escapeHTML(team)} down">▼</button>
+              <button type="button" class="predict-move-btn" data-dir="up" data-team="${escapeHTML(team)}" ${(idx === 0 || locked) ? "disabled" : ""} aria-label="Move ${escapeHTML(team)} up">▲</button>
+              <button type="button" class="predict-move-btn" data-dir="down" data-team="${escapeHTML(team)}" ${(idx === order.length - 1 || locked) ? "disabled" : ""} aria-label="Move ${escapeHTML(team)} down">▼</button>
             </span>
           </li>
         `).join("")}
       </ol>
     `;
-    card.querySelectorAll(".predict-move-btn").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const team = btn.dataset.team;
-        const dir = btn.dataset.dir;
-        const curr = getPredictedGroupOrder(letter);
-        const i = curr.indexOf(team);
-        if (i < 0) return;
-        const j = dir === "up" ? i - 1 : i + 1;
-        if (j < 0 || j >= curr.length) return;
-        [curr[i], curr[j]] = [curr[j], curr[i]];
-        setPredictedGroupOrder(letter, curr);
-        renderPredict();
+    if (!locked) {
+      card.querySelectorAll(".predict-move-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          // Re-check at click time in case the group just locked while user was looking
+          if (isGroupLocked(letter)) { renderPredict(); return; }
+          const team = btn.dataset.team;
+          const dir = btn.dataset.dir;
+          const curr = getPredictedGroupOrder(letter);
+          const i = curr.indexOf(team);
+          if (i < 0) return;
+          const j = dir === "up" ? i - 1 : i + 1;
+          if (j < 0 || j >= curr.length) return;
+          [curr[i], curr[j]] = [curr[j], curr[i]];
+          setPredictedGroupOrder(letter, curr);
+          renderPredict();
+        });
       });
-    });
+    }
     grid.appendChild(card);
   }
   return section;
@@ -1904,20 +2190,26 @@ function renderPredictThirdsSection() {
   const grid = section.querySelector(".predict-thirds-grid");
   for (const { group, team } of thirds) {
     const isSelected = selected.has(team);
-    const isDisabled = !isSelected && count >= 8;
+    const isLocked = isGroupLocked(group) || isViewingShared();
+    // Lock disables further changes; reaching 8 disables only the unselected ones
+    const isDisabled = isLocked || (!isSelected && count >= 8);
     const chip = document.createElement("button");
     chip.type = "button";
-    chip.className = `predict-third-chip${isSelected ? " is-selected" : ""}${isDisabled ? " is-disabled" : ""}`;
+    chip.className = `predict-third-chip${isSelected ? " is-selected" : ""}${isDisabled ? " is-disabled" : ""}${isLocked ? " is-locked" : ""}`;
     chip.disabled = isDisabled;
+    if (isLocked) chip.title = "Locked — group matches have started";
     chip.innerHTML = `
-      <span class="predict-third-group">3rd ${group}</span>
+      <span class="predict-third-group">3rd ${group}${isLocked ? " 🔒" : ""}</span>
       <span class="flag">${flagFor(team)}</span>
       <span class="predict-third-team">${escapeHTML(team)}</span>
     `;
-    chip.addEventListener("click", () => {
-      toggleBestThird(team);
-      renderPredict();
-    });
+    if (!isLocked) {
+      chip.addEventListener("click", () => {
+        if (isGroupLocked(group)) { renderPredict(); return; }
+        toggleBestThird(team);
+        renderPredict();
+      });
+    }
     grid.appendChild(chip);
   }
   return section;
@@ -1987,30 +2279,40 @@ function renderPredictBracketSection() {
 function renderPredictBracketMatch(m, predKo) {
   const { team1, team2 } = predictResolveMatchTeams(m, predKo);
   const winner = predictGetWinner(m, predKo);
+  const locked = isMatchLocked(m) || isViewingShared();
 
   const card = document.createElement("div");
   card.className = "bracket-match predict-bracket-match";
+  if (locked) card.classList.add("is-locked");
 
   const row = (team, isWinner, isLoser, isPlaceholder, side) => {
     const safeTeam = team ? escapeHTML(team) : "";
-    const clickable = team && !isPlaceholder;
+    const clickable = team && !isPlaceholder && !locked;
     return `
       <div class="bracket-team predict-bracket-team${isWinner ? " win" : ""}${isLoser ? " lose" : ""}${isPlaceholder ? " placeholder" : ""}${clickable ? " clickable" : ""}"
            ${clickable ? `data-team="${safeTeam}"` : ""}
            role="${clickable ? "button" : ""}"
-           tabindex="${clickable ? "0" : "-1"}">
+           tabindex="${clickable ? "0" : "-1"}"
+           ${locked ? `title="Locked — match has kicked off"` : ""}>
         <span class="flag">${team ? flagFor(team) : ""}</span>
         <span class="bracket-team-name" title="${safeTeam}">${team || "TBD"}</span>
       </div>`;
   };
 
+  const lockBadge = locked
+    ? `<div class="predict-bracket-lock" title="Locked — match has kicked off">🔒</div>`
+    : "";
+
   card.innerHTML =
     row(team1, winner && winner === team1, winner && winner !== team1, !team1, 1) +
-    row(team2, winner && winner === team2, winner && winner !== team2, !team2, 2);
+    row(team2, winner && winner === team2, winner && winner !== team2, !team2, 2) +
+    lockBadge;
 
   card.querySelectorAll(".predict-bracket-team.clickable").forEach(el => {
     const pickTeam = el.dataset.team;
     const select = () => {
+      // Defense in depth — recheck lock at click time
+      if (isMatchLocked(m)) { renderPredict(); return; }
       const current = state.prediction.koWinners[matchId(m)];
       // Clicking the already-winner clears the pick; clicking the other team replaces it
       setPredictKoWinner(m, current === pickTeam ? null : pickTeam);
@@ -2531,6 +2833,84 @@ populateTimezones();
 populateDates();
 render();
 
+// Shared prediction link handler: someone opened the site with #pred=… in the URL.
+// View-only mode — load into state.sharedPrediction so the user's own picks stay safe.
+// The recipient can explicitly tap "Save as mine" to commit, or "Back to mine" to discard.
+(function handleSharedPrediction() {
+  const hash = window.location.hash || "";
+  const match = hash.match(/^#pred=(.+)$/);
+  if (!match) return;
+  const encoded = decodeURIComponent(match[1]);
+  const decoded = decodePrediction(encoded);
+  if (!decoded) return;
+
+  // Clear the hash so a refresh doesn't re-trigger the load
+  history.replaceState(null, "", `${location.pathname}${location.search}`);
+
+  state.sharedPrediction = decoded;
+  switchView("predict");
+})();
+
+// Tick every 30s to refresh countdowns and toggle LIVE state in place
+// without rebuilding the entire DOM (which would lose input focus).
+function tickCountdowns() {
+  const now = Date.now();
+  const cards = document.querySelectorAll(".match-card[data-kickoff]");
+  cards.forEach(card => {
+    const kickoff = +card.dataset.kickoff;
+    if (!kickoff) return;
+    const stage = card.dataset.stage || "group";
+    const cdFinal = formatCountdownDirect(kickoff, stage, now);
+    card.classList.toggle("is-live", cdFinal.state === "live");
+    const chip = card.querySelector(".match-countdown");
+    if (!chip) {
+      if (cdFinal.state !== "ended") {
+        const meta = card.querySelector(".match-meta");
+        if (meta) {
+          const newChip = document.createElement("span");
+          newChip.className = `match-countdown ${cdFinal.state}`;
+          newChip.textContent = cdFinal.text;
+          meta.appendChild(newChip);
+        }
+      }
+      return;
+    }
+    if (cdFinal.state === "ended") {
+      chip.remove();
+      return;
+    }
+    chip.textContent = cdFinal.text;
+    chip.className = `match-countdown ${cdFinal.state}`;
+  });
+  // If user is on the Predict tab, re-render so newly-kicked-off matches/groups lock
+  if (state.view === "predict") renderPredict();
+}
+
+// Same shape as formatCountdown but called with already-known kickoff ms + stage —
+// avoids the fixtureToUTC round-trip for the per-tick path.
+function formatCountdownDirect(kickoffMs, stage, nowMs) {
+  const liveWindow = (stage && stage !== "group") ? LIVE_DURATION_KO_MS : LIVE_DURATION_GROUP_MS;
+  const diff = kickoffMs - nowMs;
+  if (diff > 0) {
+    const totalMin = Math.floor(diff / 60000);
+    const days = Math.floor(totalMin / 1440);
+    const hours = Math.floor((totalMin % 1440) / 60);
+    const minutes = totalMin % 60;
+    let text;
+    if (days >= 2) text = `in ${days}d ${hours}h`;
+    else if (days === 1) text = `in 1d ${hours}h`;
+    else if (hours > 0) text = `in ${hours}h ${minutes}m`;
+    else if (minutes > 0) text = `in ${minutes} min`;
+    else text = "starting soon";
+    return { state: "upcoming", text: `⏰ ${text}` };
+  }
+  if (-diff < liveWindow) {
+    return { state: "live", text: "🔴 LIVE" };
+  }
+  return { state: "ended", text: "" };
+}
+setInterval(tickCountdowns, 30 * 1000);
+
 // Bootstrap from Appwrite (preferred) or fall back to results.json.
 // Smart strategy: do a lightweight version check first (2 tiny queries).
 // If the cached snapshot matches what's on Appwrite, skip the full bootstrap
@@ -2586,5 +2966,36 @@ if (appwriteSync.available) {
       applyServerData(payload);
       rerenderActive();
     }
+  });
+}
+
+// ===== Service worker (offline + installable PWA) =====
+// Only register on http(s), not file:// — and skip silently if unsupported.
+if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js")
+      .then((reg) => {
+        // When a new SW is waiting, optionally let the user pick it up immediately
+        reg.addEventListener("updatefound", () => {
+          const newSW = reg.installing;
+          if (!newSW) return;
+          newSW.addEventListener("statechange", () => {
+            if (newSW.state === "installed" && navigator.serviceWorker.controller) {
+              // A new version is available; activate it on next nav by telling it to skip waiting
+              newSW.postMessage("SKIP_WAITING");
+            }
+          });
+        });
+      })
+      .catch((err) => console.warn("Service worker registration failed:", err));
+
+    // When the active SW changes (new version took over), reload once so the app
+    // picks up fresh assets. Guard against the reload loop with a session flag.
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloaded) return;
+      reloaded = true;
+      window.location.reload();
+    });
   });
 }
