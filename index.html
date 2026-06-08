@@ -53,6 +53,8 @@
         <button class="tab" data-view="groups" role="tab" aria-selected="false">Groups</button>
         <button class="tab" data-view="standings" role="tab" aria-selected="false">Standings</button>
         <button class="tab" data-view="bracket" role="tab" aria-selected="false">Bracket</button>
+        <button class="tab" data-view="scorers" role="tab" aria-selected="false">Scorers</button>
+        <button class="tab" data-view="predict" role="tab" aria-selected="false">Predict</button>
       </div>
     </section>
 
@@ -64,6 +66,10 @@
 
     <section id="bracketView" class="bracket-view" hidden></section>
 
+    <section id="scorersView" class="scorers-leaderboard-view" hidden></section>
+
+    <section id="predictView" class="predict-view" hidden></section>
+
     <section id="scheduleView" class="schedule-view"></section>
   </main>
 
@@ -71,6 +77,7 @@
     <p>Fixture data from public sources.Knockout matches will be updated as teams qualify.</p>
   </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/appwrite@16.0.2"></script>
   <script src="fixtures.js"></script>
   <script src="third-place-matrix.js"></script>
   <script src="app.js"></script>
