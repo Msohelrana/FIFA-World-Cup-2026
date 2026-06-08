@@ -1713,7 +1713,11 @@ function renderPredict() {
   header.className = "predict-header";
   header.innerHTML = `
     <p>Pick your full World Cup prediction. All choices save automatically to this browser only.</p>
-    <button type="button" id="predictResetBtn" class="danger-btn">Reset all predictions</button>
+    <div class="predict-header-actions">
+      <button type="button" id="predictSaveImgBtn" class="action-btn">📷 Save image</button>
+      <button type="button" id="predictSavePdfBtn" class="action-btn">📄 Save PDF</button>
+      <button type="button" id="predictResetBtn" class="danger-btn">Reset all</button>
+    </div>
   `;
   view.appendChild(header);
   header.querySelector("#predictResetBtn").addEventListener("click", async () => {
@@ -1727,10 +1731,103 @@ function renderPredict() {
     clearAllPredictions();
     renderPredict();
   });
+  header.querySelector("#predictSaveImgBtn").addEventListener("click", (e) => downloadPrediction("png", e.currentTarget));
+  header.querySelector("#predictSavePdfBtn").addEventListener("click", (e) => downloadPrediction("pdf", e.currentTarget));
 
   view.appendChild(renderPredictGroupsSection());
   view.appendChild(renderPredictThirdsSection());
   view.appendChild(renderPredictBracketSection());
+}
+
+// Lazy-load a CDN script; resolves once it's available globally.
+function loadExternalScript(src) {
+  return new Promise((resolve, reject) => {
+    if (document.querySelector(`script[data-src="${src}"]`)) return resolve();
+    const s = document.createElement("script");
+    s.src = src;
+    s.dataset.src = src;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(s);
+  });
+}
+
+async function downloadPrediction(format, btnEl) {
+  const target = els.predictView;
+  if (!target) return;
+
+  // UI feedback while we load libs + render the capture
+  const originalText = btnEl ? btnEl.textContent : "";
+  const setBtn = (text, disabled) => {
+    if (!btnEl) return;
+    btnEl.textContent = text;
+    btnEl.disabled = !!disabled;
+  };
+  setBtn("Working…", true);
+
+  // Hide the header action buttons (and the page's sticky filter bar) during
+  // capture so the saved file shows just the prediction itself.
+  const hideDuringCapture = [
+    target.querySelector(".predict-header-actions"),
+    document.querySelector(".controls"),
+  ].filter(Boolean);
+  const originalDisplay = hideDuringCapture.map(el => el.style.display);
+  hideDuringCapture.forEach(el => { el.style.display = "none"; });
+
+  // Bracket scroll containers crop the wide bracket to the viewport; relax them
+  // so the full bracket is captured rather than only the visible portion.
+  const scrollers = target.querySelectorAll(".bracket-scroll");
+  const originalOverflow = [];
+  scrollers.forEach(s => {
+    originalOverflow.push(s.style.overflow);
+    s.style.overflow = "visible";
+  });
+
+  try {
+    await loadExternalScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+    if (format === "pdf") {
+      await loadExternalScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+    }
+
+    const canvas = await window.html2canvas(target, {
+      backgroundColor: "#0b1020",
+      scale: Math.min(2, window.devicePixelRatio || 1.5),
+      useCORS: true,
+      logging: false,
+      windowWidth: Math.max(document.documentElement.clientWidth, target.scrollWidth),
+    });
+
+    const stamp = new Date().toISOString().slice(0, 10);
+
+    if (format === "png") {
+      const link = document.createElement("a");
+      link.download = `wc2026-prediction-${stamp}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } else {
+      const { jsPDF } = window.jspdf;
+      const w = canvas.width;
+      const h = canvas.height;
+      const pdf = new jsPDF({
+        orientation: w > h ? "landscape" : "portrait",
+        unit: "px",
+        format: [w, h],
+        compress: true,
+      });
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, w, h);
+      pdf.save(`wc2026-prediction-${stamp}.pdf`);
+    }
+  } catch (err) {
+    showAlert("Could not generate the file: " + (err.message || err), {
+      title: "Save failed",
+      icon: "⚠️",
+      iconType: "warning",
+    });
+  } finally {
+    hideDuringCapture.forEach((el, i) => { el.style.display = originalDisplay[i] || ""; });
+    scrollers.forEach((s, i) => { s.style.overflow = originalOverflow[i] || ""; });
+    setBtn(originalText, false);
+  }
 }
 
 function renderPredictGroupsSection() {
