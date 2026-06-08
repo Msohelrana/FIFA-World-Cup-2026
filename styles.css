@@ -1554,6 +1554,7 @@ footer {
   color: var(--text);
   font-size: 13px;
   cursor: pointer;
+  min-width: 0;              /* allow shrink inside grid cell so contents truncate */
   text-align: left;
   transition: all 0.15s;
 }
@@ -1614,5 +1615,11 @@ footer {
   .predict-step { padding: 14px; }
   .predict-step-title { font-size: 16px; }
   .predict-groups { grid-template-columns: 1fr; }
-  .predict-thirds-grid { grid-template-columns: 1fr 1fr; }
+  /* Auto-fit collapses to 1 column on very narrow phones; 2 on wider ones */
+  .predict-thirds-grid {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+  }
+  .predict-third-chip { padding: 9px 10px; font-size: 12.5px; }
+  .predict-third-group { font-size: 9px; padding: 2px 5px; letter-spacing: 0.04em; }
 }
