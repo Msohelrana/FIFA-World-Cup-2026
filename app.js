@@ -1234,16 +1234,27 @@ function renderStandings() {
           danger: true,
         });
       if (!ok) return;
-      // Capture IDs BEFORE clearing so we can tell Appwrite which docs to delete
-      const matchIdsToDelete = Object.keys(state.results);
-      const lettersToDelete = Object.keys(state.standingsOverride);
+      // Pull the full server-side list FIRST so we delete what actually exists
+      // on Appwrite, not just whatever this device happens to have cached.
+      // Without this, clearing from a stale device leaves other devices' writes intact.
+      const allMatchIds = new Set(Object.keys(state.results));
+      const allLetters = new Set(Object.keys(state.standingsOverride));
+      if (appwriteSync.available) {
+        const serverData = await appwriteSync.bootstrap();
+        if (serverData) {
+          for (const mid of Object.keys(serverData.results)) allMatchIds.add(mid);
+          for (const letter of Object.keys(serverData.overrides)) allLetters.add(letter);
+        }
+      }
       state.results = {};
       state.standingsOverride = {};
       saveResults();
       saveStandingsOverride();
-      // Propagate deletions to Appwrite (each pushMatch sees no local entry → deletes the doc)
-      for (const mid of matchIdsToDelete) appwriteSync.scheduleMatch(mid);
-      for (const letter of lettersToDelete) appwriteSync.scheduleStandings(letter);
+      // Propagate deletions — every pushMatch sees no local entry → sends DELETE
+      for (const mid of allMatchIds) appwriteSync.scheduleMatch(mid);
+      for (const letter of allLetters) appwriteSync.scheduleStandings(letter);
+      // Also clear cached version so the next page load doesn't trust stale meta
+      try { localStorage.removeItem(CACHE_VERSION_KEY); } catch {}
       renderStandings();
       if (state.view === "schedule") renderSchedule(state.selectedTeam, state.selectedDate);
     });
@@ -2534,13 +2545,15 @@ const appwriteSync = (() => {
     const r = state.results[matchId];
     const docId = appwriteDocId(matchId);
     if (!r) {
-      // Entry was deleted locally — propagate
-      if (!knownResultDocs.has(docId)) return;
+      // Entry was deleted locally — propagate to Appwrite. Always attempt the
+      // delete: this client may not have seen the doc in its knownResultDocs
+      // set yet (e.g., other device added it after our last bootstrap).
       try {
         await db.deleteDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.resultsCollection, docId);
         knownResultDocs.delete(docId);
       } catch (err) {
         if (err.code !== 404) console.warn("Appwrite delete failed:", err.message || err);
+        // 404 = doc didn't exist on server, which is fine
       }
       return;
     }
@@ -2576,7 +2589,7 @@ const appwriteSync = (() => {
     const order = state.standingsOverride[groupLetter];
     const docId = groupLetter; // safe single-char Appwrite ID
     if (!Array.isArray(order) || order.length === 0) {
-      if (!knownStandingDocs.has(docId)) return;
+      // Always attempt delete (don't gate on knownStandingDocs — see pushMatch comment)
       try {
         await db.deleteDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.standingsCollection, docId);
         knownStandingDocs.delete(docId);
