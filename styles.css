@@ -1149,7 +1149,8 @@ body.is-admin .standings-table .pos { width: 56px; }
 .standings-view[hidden],
 .bracket-view[hidden],
 .scorers-leaderboard-view[hidden],
-.predict-view[hidden] {
+.predict-view[hidden],
+.picks-view[hidden] {
   display: none;
 }
 .group-card {
@@ -1231,17 +1232,17 @@ footer {
   }
   #clearBtn { width: 100%; }
 
-  /* View toggle: wrap to 2 rows of 3 tabs each on mobile so labels stay readable */
+  /* View toggle: wrap to 2 rows on mobile (4 + 3 layout for 7 tabs) */
   .view-toggle {
     width: 100%;
     flex-wrap: wrap;
     row-gap: 3px;
   }
   .tab {
-    flex: 1 1 30%;           /* ~3 per row; wraps cleanly when content doesn't fit */
+    flex: 1 1 23%;           /* ~4 per row; 7 tabs wrap as 4 + 3 */
     min-width: 0;
-    padding: 9px 6px;
-    font-size: 12px;
+    padding: 9px 4px;
+    font-size: 11.5px;
     white-space: nowrap;
   }
 
@@ -1376,6 +1377,39 @@ footer {
 .predict-shared-text strong { color: var(--accent-2); font-weight: 700; margin-right: 4px; }
 .predict-shared-text em { color: var(--gold); font-style: normal; font-weight: 600; }
 .predict-shared-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Picks view (per-match score predictor) ---------- */
+.picks-view { margin-top: 20px; }
+.picks-view .day-group { margin-bottom: 28px; }
+
+/* Per-card lock / pending badge inside the score row */
+.pick-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: rgba(154, 163, 199, 0.12);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pick-lock-badge.pending {
+  color: var(--accent-2);
+  background: rgba(76, 201, 240, 0.10);
+  border-color: rgba(76, 201, 240, 0.3);
+}
+.pick-card .result-row .score-input:disabled {
+  cursor: not-allowed;
+  background: rgba(11, 16, 32, 0.4);
+  color: var(--text-dim);
+}
+/* Result label color cues — gold for a clear winner, cyan for a draw */
+.pick-card .result-label.is-draw { color: var(--accent-2); }
 .predict-header-actions {
   display: flex;
   flex-wrap: wrap;

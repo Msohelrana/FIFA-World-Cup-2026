@@ -12,6 +12,7 @@ const els = {
   bracketView: document.getElementById("bracketView"),
   scorersView: document.getElementById("scorersView"),
   predictView: document.getElementById("predictView"),
+  picksView: document.getElementById("picksView"),
   summary: document.getElementById("summary"),
   tabs: document.querySelectorAll(".tab"),
 };
@@ -20,6 +21,7 @@ const RESULTS_KEY = "wc2026_results";
 const ADMIN_KEY = "wc2026_admin";
 const OVERRIDE_KEY = "wc2026_standings_override";
 const PREDICTION_KEY = "wc2026_prediction";
+const MATCH_PICKS_KEY = "wc2026_match_picks";
 
 // ─────────────────────────────────────────────────────────────
 // CHANGE THIS PASSWORD before deploying. Only people who know
@@ -60,10 +62,30 @@ const state = {
   standingsOverride: loadStandingsOverride(),
   prediction: loadPrediction(),
   sharedPrediction: null,        // set when viewing someone else's shared link (read-only)
+  matchPicks: loadMatchPicks(),
   isAdmin: localStorage.getItem(ADMIN_KEY) === "1",
 };
 
 function isViewingShared() { return !!state.sharedPrediction; }
+
+// --- Per-match score predictions (the Picks tab) ---
+function loadMatchPicks() {
+  try { return JSON.parse(localStorage.getItem(MATCH_PICKS_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveMatchPicks() {
+  localStorage.setItem(MATCH_PICKS_KEY, JSON.stringify(state.matchPicks));
+}
+function getMatchPick(m) { return state.matchPicks[matchId(m)]; }
+function setMatchPick(m, score1, score2) {
+  const id = matchId(m);
+  if (score1 === undefined && score2 === undefined) {
+    delete state.matchPicks[id];
+  } else {
+    state.matchPicks[id] = { score1, score2 };
+  }
+  saveMatchPicks();
+}
 
 function loadPrediction() {
   try {
@@ -403,6 +425,7 @@ function rerenderActive() {
   else if (state.view === "bracket") renderBracket();
   else if (state.view === "scorers") renderTopScorers();
   else if (state.view === "predict") renderPredict();
+  else if (state.view === "picks") renderPicks();
 }
 
 function matchId(m) {
@@ -1545,6 +1568,158 @@ function computeTopScorers() {
   return rows;
 }
 
+// --- Picks (per-match score predictions) ---
+// Verdict label for a user's predicted score (group → "wins"/"Draw", KO → "advances"/"Tied").
+function pickResultLabel(m, pick, t1, t2) {
+  if (!pick || pick.score1 === undefined || pick.score2 === undefined) return "";
+  const isKO = m.stage !== "group";
+  if (pick.score1 > pick.score2) return `${t1} ${isKO ? "advances" : "wins"}`;
+  if (pick.score2 > pick.score1) return `${t2} ${isKO ? "advances" : "wins"}`;
+  // Equal scores
+  return isKO ? "Tied — pick a winning score" : "Draw";
+}
+
+function renderPicks() {
+  const view = els.picksView;
+  view.innerHTML = "";
+
+  // Header with intro + counter + reset
+  const total = FIXTURES.length;
+  const filled = Object.keys(state.matchPicks).filter(id =>
+    state.matchPicks[id].score1 !== undefined && state.matchPicks[id].score2 !== undefined
+  ).length;
+  const header = document.createElement("div");
+  header.className = "predict-header";
+  header.innerHTML = `
+    <p>Predict the final score of every match. Picks save to this browser only and lock when each match kicks off.
+       <strong style="color: var(--accent-2)">${filled}/${total}</strong> filled in.</p>
+    <div class="predict-header-actions">
+      <button type="button" id="picksResetBtn" class="danger-btn">Reset all picks</button>
+    </div>
+  `;
+  view.appendChild(header);
+  header.querySelector("#picksResetBtn").addEventListener("click", async () => {
+    const ok = await showConfirm("Clear every score prediction in this device?", {
+      title: "Reset picks",
+      icon: "♻",
+      confirmLabel: "Reset",
+      danger: true,
+    });
+    if (!ok) return;
+    state.matchPicks = {};
+    saveMatchPicks();
+    renderPicks();
+  });
+
+  // Group matches by date in selected tz, like the schedule view
+  const tz = state.selectedTz;
+  const ko = getKnockoutAssignments();           // resolve teams via admin's official results
+  const byDate = new Map();
+  for (const m of FIXTURES) {
+    const key = dateKeyInTz(fixtureToUTC(m), tz);
+    if (!byDate.has(key)) byDate.set(key, []);
+    byDate.get(key).push(m);
+  }
+  const sortedDates = [...byDate.keys()].sort();
+
+  for (const key of sortedDates) {
+    const dayMatches = byDate.get(key)
+      .sort((a, b) => fixtureToUTC(a).getTime() - fixtureToUTC(b).getTime());
+
+    const dayGroup = document.createElement("div");
+    dayGroup.className = "day-group";
+    const count = dayMatches.length;
+    dayGroup.innerHTML = `
+      <div class="day-header">
+        <span class="day-date">${formatLocalDateLabel(key)}</span>
+        <span class="day-count">${count} ${count === 1 ? "match" : "matches"}</span>
+      </div>
+    `;
+
+    const list = document.createElement("div");
+    list.className = "match-list";
+    for (const m of dayMatches) list.appendChild(renderPickCard(m, ko));
+    dayGroup.appendChild(list);
+    view.appendChild(dayGroup);
+  }
+}
+
+function renderPickCard(m, ko) {
+  const stageLabel = STAGE_LABELS[m.stage] + (m.group ? ` · Group ${m.group}` : "");
+  const card = document.createElement("article");
+  card.className = "match-card pick-card";
+
+  const { team1: resolved1, team2: resolved2 } = resolveMatchTeams(m, ko);
+  const t1 = resolved1 || m.team1;
+  const t2 = resolved2 || m.team2;
+  const teamsKnown = !!(resolved1 && resolved2) || m.stage === "group";
+
+  const kickoffUtcMs = fixtureToUTC(m).getTime();
+  const localTime = formatTimeInTz(fixtureToUTC(m), state.selectedTz);
+  const locked = isMatchLocked(m);
+  const cd = formatCountdown(m);
+  const countdownChip = cd.state === "ended"
+    ? ""
+    : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
+  const stageBadge = `<span class="stage-badge ${m.stage}">${stageLabel}</span>`;
+  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${localTime}</span>${countdownChip}</div>`;
+  if (cd.state === "live") card.classList.add("is-live");
+  card.dataset.kickoff = String(kickoffUtcMs);
+  card.dataset.stage = m.stage;
+
+  const f1 = flagFor(t1);
+  const f2 = flagFor(t2);
+  const teamsHTML = `<div class="match-teams">
+    <span class="team"><span class="flag">${f1}</span><span class="team-name" title="${t1}">${t1}</span></span>
+    <span class="vs">VS</span>
+    <span class="team right"><span class="team-name" title="${t2}">${t2}</span><span class="flag flag-right">${f2}</span></span>
+  </div>`;
+
+  const pick = getMatchPick(m) || {};
+  const s1 = pick.score1 ?? "";
+  const s2 = pick.score2 ?? "";
+
+  const disabledAttr = (!teamsKnown || locked) ? "disabled" : "";
+  const lockBadge = locked
+    ? `<span class="pick-lock-badge" title="Match has kicked off">🔒 Locked</span>`
+    : (!teamsKnown ? `<span class="pick-lock-badge pending" title="Teams not yet decided">⏳ TBD</span>` : "");
+  const labelText = pickResultLabel(m, pick, t1, t2);
+  const isDraw = pick.score1 !== undefined && pick.score2 !== undefined && pick.score1 === pick.score2;
+  const resultLine = `
+    <div class="result-row pick-row" data-mid="${matchId(m)}">
+      <input type="number" min="0" max="99" class="score-input pick-s1" value="${s1}" placeholder="–" aria-label="Predicted score for ${t1}" ${disabledAttr}>
+      <span class="score-sep">:</span>
+      <input type="number" min="0" max="99" class="score-input pick-s2" value="${s2}" placeholder="–" aria-label="Predicted score for ${t2}" ${disabledAttr}>
+      ${lockBadge}
+      <span class="result-label ${isDraw ? "is-draw" : ""}">${labelText}</span>
+    </div>`;
+
+  const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span></div>`;
+  card.innerHTML = meta + teamsHTML + resultLine + footer;
+
+  if (!locked && teamsKnown) {
+    const row = card.querySelector(".result-row");
+    const label = row.querySelector(".result-label");
+    const i1 = row.querySelector(".pick-s1");
+    const i2 = row.querySelector(".pick-s2");
+    const parse = el => el.value === "" ? undefined : Math.max(0, Math.min(99, parseInt(el.value, 10) || 0));
+    const onChange = () => {
+      // Re-check lock at change time; if just kicked off, refuse + re-render
+      if (isMatchLocked(m)) { renderPicks(); return; }
+      const v1 = parse(i1);
+      const v2 = parse(i2);
+      setMatchPick(m, v1, v2);
+      // Update the verdict label inline (no full re-render → keeps input focus)
+      label.textContent = pickResultLabel(m, { score1: v1, score2: v2 }, t1, t2);
+      label.classList.toggle("is-draw", v1 !== undefined && v2 !== undefined && v1 === v2);
+    };
+    i1.addEventListener("input", onChange);
+    i2.addEventListener("input", onChange);
+  }
+
+  return card;
+}
+
 function renderTopScorers() {
   const view = els.scorersView;
   view.innerHTML = "";
@@ -2404,12 +2579,14 @@ function switchView(view) {
   els.bracketView.hidden = view !== "bracket";
   els.scorersView.hidden = view !== "scorers";
   els.predictView.hidden = view !== "predict";
+  els.picksView.hidden = view !== "picks";
   if (view === "schedule") render();
   if (view === "groups") renderGroups();
   if (view === "standings") renderStandings();
   if (view === "bracket") renderBracket();
   if (view === "scorers") renderTopScorers();
   if (view === "predict") renderPredict();
+  if (view === "picks") renderPicks();
 }
 
 function render() {
@@ -2897,6 +3074,8 @@ function tickCountdowns() {
   });
   // If user is on the Predict tab, re-render so newly-kicked-off matches/groups lock
   if (state.view === "predict") renderPredict();
+  // Same for Picks — newly-kicked-off matches need their inputs disabled
+  if (state.view === "picks") renderPicks();
 }
 
 // Same shape as formatCountdown but called with already-known kickoff ms + stage —
