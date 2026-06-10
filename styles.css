@@ -35,7 +35,7 @@ html, body {
   padding: 56px 24px 48px;
   border-bottom: 1px solid var(--border);
 }
-.hero-admin-btn {
+.hero-user-btn {
   position: absolute;
   top: 18px;
   right: 24px;
@@ -44,8 +44,18 @@ html, body {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
+.hero-user-btn.is-active {
+  background: rgba(76, 201, 240, 0.18);
+  color: var(--accent-2);
+  border-color: rgba(76, 201, 240, 0.45);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 @media (max-width: 560px) {
-  .hero-admin-btn { top: 12px; right: 14px; padding: 7px 11px; font-size: 12px; }
+  .hero-user-btn { top: 12px; right: 14px; padding: 7px 11px; font-size: 12px; }
+  .hero-user-btn.is-active { max-width: 160px; }
 }
 .hero-inner {
   max-width: 1100px;
@@ -1410,6 +1420,117 @@ footer {
 }
 /* Result label color cues — gold for a clear winner, cyan for a draw */
 .pick-card .result-label.is-draw { color: var(--accent-2); }
+
+/* Penalty winner picker (appears under score row when KO + tied) */
+.pk-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: rgba(255, 209, 102, 0.08);
+  border: 1px dashed rgba(255, 209, 102, 0.35);
+  border-radius: 10px;
+  font-size: 12px;
+}
+.pk-label {
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.pk-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pk-btn:hover { border-color: var(--gold); color: var(--gold); }
+.pk-btn.is-picked {
+  background: rgba(255, 209, 102, 0.18);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Sign-in banner above the picks list */
+.picks-signin-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.18), rgba(255, 77, 109, 0.12));
+  border: 1px solid rgba(76, 201, 240, 0.4);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+.picks-signin-text { flex: 1; min-width: 240px; font-size: 13px; line-height: 1.55; }
+.picks-signin-text strong { color: var(--accent-2); }
+.picks-signin-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Leaderboard table */
+.picks-leaderboard-section {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.picks-lb-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  color: var(--accent-2);
+}
+.picks-lb-empty { margin: 0; color: var(--text-dim); font-size: 13px; }
+.picks-lb-table-wrap { overflow-x: auto; }
+.picks-lb-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 480px; }
+.picks-lb-table th, .picks-lb-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(40, 49, 90, 0.5);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.picks-lb-table th {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.picks-lb-table tr:last-child td { border-bottom: none; }
+.picks-lb-table .lb-name { text-align: left; font-weight: 600; }
+.picks-lb-table .lb-rank { width: 60px; color: var(--text-dim); font-weight: 700; }
+.picks-lb-table .lb-total { color: var(--gold); font-weight: 700; font-size: 14px; width: 60px; }
+.picks-lb-table .lb-exact, .picks-lb-table .lb-outcome, .picks-lb-table .lb-pk { width: 70px; color: var(--text-dim); }
+.picks-lb-table tr.lb-top td { background: rgba(255, 209, 102, 0.06); }
+.picks-lb-table tr.is-me td { background: rgba(76, 201, 240, 0.12); }
+.lb-you {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(76, 201, 240, 0.18);
+  color: var(--accent-2);
+  border-radius: 999px;
+}
 .predict-header-actions {
   display: flex;
   flex-wrap: wrap;

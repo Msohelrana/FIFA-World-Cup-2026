@@ -5,7 +5,7 @@ const els = {
   dateSelect: document.getElementById("dateSelect"),
   tzSelect: document.getElementById("tzSelect"),
   clearBtn: document.getElementById("clearBtn"),
-  adminBtn: document.getElementById("adminBtn"),
+  userBtn: document.getElementById("userBtn"),
   scheduleView: document.getElementById("scheduleView"),
   groupsView: document.getElementById("groupsView"),
   standingsView: document.getElementById("standingsView"),
@@ -18,17 +18,15 @@ const els = {
 };
 
 const RESULTS_KEY = "wc2026_results";
-const ADMIN_KEY = "wc2026_admin";
 const OVERRIDE_KEY = "wc2026_standings_override";
+
+// Admin status is derived from the logged-in Appwrite user — only this account
+// can edit official results, standings overrides, and scorers. Other signed-in
+// users are regular viewers.
+const ADMIN_USER_ID = "6a291eea003080242282";
+function isUserAdmin(user) { return !!user && user.id === ADMIN_USER_ID; }
 const PREDICTION_KEY = "wc2026_prediction";
 const MATCH_PICKS_KEY = "wc2026_match_picks";
-
-// ─────────────────────────────────────────────────────────────
-// CHANGE THIS PASSWORD before deploying. Only people who know
-// it can edit results; everyone else sees read-only data.
-// Note: this is a soft lock (client-side), not real security.
-// ─────────────────────────────────────────────────────────────
-const ADMIN_PASSWORD = "@466726";
 
 const TIMEZONES = [
   { label: "Bangladesh (Dhaka) — default", tz: "Asia/Dhaka" },
@@ -63,7 +61,10 @@ const state = {
   prediction: loadPrediction(),
   sharedPrediction: null,        // set when viewing someone else's shared link (read-only)
   matchPicks: loadMatchPicks(),
-  isAdmin: localStorage.getItem(ADMIN_KEY) === "1",
+  currentUser: null,             // {id, name, email} once logged in
+  leaderboardUsers: [],          // [{userId, userName, picks, firstSubmittedAt}] for ranking
+  showLeaderboard: false,        // Match Predict tab: hide leaderboard behind a toggle button
+  isAdmin: false,                // set by auth bootstrap once currentUser is known
 };
 
 function isViewingShared() { return !!state.sharedPrediction; }
@@ -114,92 +115,12 @@ function saveStandingsOverride() {
 
 function setAdmin(value) {
   state.isAdmin = !!value;
-  if (state.isAdmin) localStorage.setItem(ADMIN_KEY, "1");
-  else localStorage.removeItem(ADMIN_KEY);
   applyAdminClass();
 }
 
 function applyAdminClass() {
   document.body.classList.toggle("is-admin", state.isAdmin);
   document.body.classList.toggle("is-viewer", !state.isAdmin);
-}
-
-function openLoginModal() {
-  // Remove any existing modal first
-  const existing = document.getElementById("loginModal");
-  if (existing) existing.remove();
-
-  const modal = document.createElement("div");
-  modal.id = "loginModal";
-  modal.className = "modal";
-  modal.innerHTML = `
-    <div class="modal-backdrop"></div>
-    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
-      <div class="modal-icon">🔒</div>
-      <h2 id="loginTitle">Admin Login</h2>
-      <p class="modal-subtitle">Enter your password to enable result editing.</p>
-      <input type="password" id="loginPassword" class="modal-input"
-             placeholder="Password" autocomplete="current-password" spellcheck="false">
-      <p class="modal-error" id="loginError" aria-live="polite"></p>
-      <div class="modal-actions">
-        <button id="loginCancel" class="modal-btn modal-btn-ghost" type="button">Cancel</button>
-        <button id="loginSubmit" class="modal-btn modal-btn-primary" type="button">Unlock</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  document.body.classList.add("modal-open");
-
-  const input = modal.querySelector("#loginPassword");
-  const err = modal.querySelector("#loginError");
-
-  const close = () => {
-    modal.classList.add("modal-closing");
-    modal.addEventListener("animationend", () => {
-      modal.remove();
-      document.body.classList.remove("modal-open");
-    }, { once: true });
-  };
-
-  const submit = () => {
-    const pw = input.value;
-    if (pw === ADMIN_PASSWORD) {
-      setAdmin(true);
-      updateAdminBtn();
-      rerenderActive();
-      close();
-    } else {
-      err.textContent = "Wrong password. Try again.";
-      input.classList.add("modal-input-error");
-      input.focus();
-      input.select();
-      setTimeout(() => input.classList.remove("modal-input-error"), 400);
-    }
-  };
-
-  modal.querySelector("#loginCancel").addEventListener("click", close);
-  modal.querySelector(".modal-backdrop").addEventListener("click", close);
-  modal.querySelector("#loginSubmit").addEventListener("click", submit);
-  modal.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") close();
-    if (e.key === "Enter" && document.activeElement === input) submit();
-  });
-
-  // Focus the password field after the modal animates in
-  setTimeout(() => input.focus(), 60);
-}
-
-async function logout() {
-  const ok = await showConfirm("Switch to viewer mode? Editing will be locked.", {
-    title: "Logout",
-    icon: "🔒",
-    iconType: "info",
-    confirmLabel: "Logout",
-  });
-  if (!ok) return;
-  setAdmin(false);
-  updateAdminBtn();
-  rerenderActive();
 }
 
 // ───────────── Generic modal system (alert / confirm) ─────────────
@@ -1583,6 +1504,28 @@ function renderPicks() {
   const view = els.picksView;
   view.innerHTML = "";
 
+  // Sign-in banner (only when not logged in) — non-blocking; local picks still work
+  if (appwriteAuth.available && !state.currentUser) {
+    const banner = document.createElement("div");
+    banner.className = "picks-signin-banner";
+    banner.innerHTML = `
+      <div class="picks-signin-text">
+        <strong>Sign in</strong> to save your picks and join the prediction leaderboard.
+        Without an account, picks stay on this device only.
+      </div>
+      <div class="picks-signin-actions">
+        <button type="button" class="action-btn" id="picksSignInBtn">Sign in</button>
+        <button type="button" class="action-btn" id="picksSignUpBtn">Create account</button>
+      </div>
+    `;
+    view.appendChild(banner);
+    banner.querySelector("#picksSignInBtn").addEventListener("click", () => openAuthModal("signin"));
+    banner.querySelector("#picksSignUpBtn").addEventListener("click", () => openAuthModal("signup"));
+  }
+
+  // Leaderboard (always shown — viewers can browse without signing in)
+  view.appendChild(renderPicksLeaderboard());
+
   // Header with intro + counter + reset
   const total = FIXTURES.length;
   const filled = Object.keys(state.matchPicks).filter(id =>
@@ -1590,9 +1533,10 @@ function renderPicks() {
   ).length;
   const header = document.createElement("div");
   header.className = "predict-header";
+  const savedNote = state.currentUser ? " (synced to your account)" : " (this device only)";
   header.innerHTML = `
-    <p>Predict the final score of every match. Picks save to this browser only and lock when each match kicks off.
-       <strong style="color: var(--accent-2)">${filled}/${total}</strong> filled in.</p>
+    <p>Predict the final score of every match. Locks at each match's kickoff.
+       <strong style="color: var(--accent-2)">${filled}/${total}</strong> filled in${savedNote}.</p>
     <div class="predict-header-actions">
       <button type="button" id="picksResetBtn" class="danger-btn">Reset all picks</button>
     </div>
@@ -1608,6 +1552,7 @@ function renderPicks() {
     if (!ok) return;
     state.matchPicks = {};
     saveMatchPicks();
+    if (state.currentUser) userPicksSync.saveOwn();
     renderPicks();
   });
 
@@ -1685,6 +1630,14 @@ function renderPickCard(m, ko) {
     : (!teamsKnown ? `<span class="pick-lock-badge pending" title="Teams not yet decided">⏳ TBD</span>` : "");
   const labelText = pickResultLabel(m, pick, t1, t2);
   const isDraw = pick.score1 !== undefined && pick.score2 !== undefined && pick.score1 === pick.score2;
+  const isKO = m.stage !== "group";
+  const showPkPicker = isKO && isDraw && !locked && teamsKnown;
+  const pkPickerHTML = showPkPicker ? `
+    <div class="pk-picker-row" aria-label="Predicted penalty winner">
+      <span class="pk-label">PK winner:</span>
+      <button type="button" class="pk-btn ${pick.pkWinner === 1 ? "is-picked" : ""}" data-pk="1">${escapeHTML(t1)}</button>
+      <button type="button" class="pk-btn ${pick.pkWinner === 2 ? "is-picked" : ""}" data-pk="2">${escapeHTML(t2)}</button>
+    </div>` : "";
   const resultLine = `
     <div class="result-row pick-row" data-mid="${matchId(m)}">
       <input type="number" min="0" max="99" class="score-input pick-s1" value="${s1}" placeholder="–" aria-label="Predicted score for ${t1}" ${disabledAttr}>
@@ -1692,7 +1645,7 @@ function renderPickCard(m, ko) {
       <input type="number" min="0" max="99" class="score-input pick-s2" value="${s2}" placeholder="–" aria-label="Predicted score for ${t2}" ${disabledAttr}>
       ${lockBadge}
       <span class="result-label ${isDraw ? "is-draw" : ""}">${labelText}</span>
-    </div>`;
+    </div>${pkPickerHTML}`;
 
   const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span></div>`;
   card.innerHTML = meta + teamsHTML + resultLine + footer;
@@ -1708,16 +1661,101 @@ function renderPickCard(m, ko) {
       if (isMatchLocked(m)) { renderPicks(); return; }
       const v1 = parse(i1);
       const v2 = parse(i2);
-      setMatchPick(m, v1, v2);
+      const prev = getMatchPick(m) || {};
+      const nowDraw = v1 !== undefined && v2 !== undefined && v1 === v2;
+      const wasDraw = prev.score1 === prev.score2;
+      // Keep pkWinner if scores are still tied; drop it otherwise
+      const next = { score1: v1, score2: v2 };
+      if (isKO && nowDraw && (prev.pkWinner === 1 || prev.pkWinner === 2)) {
+        next.pkWinner = prev.pkWinner;
+      }
+      saveMatchPickFull(m, next);
       // Update the verdict label inline (no full re-render → keeps input focus)
-      label.textContent = pickResultLabel(m, { score1: v1, score2: v2 }, t1, t2);
-      label.classList.toggle("is-draw", v1 !== undefined && v2 !== undefined && v1 === v2);
+      label.textContent = pickResultLabel(m, next, t1, t2);
+      label.classList.toggle("is-draw", nowDraw);
+      // If the draw state toggled on a KO match, the PK picker visibility changes — re-render this card
+      if (isKO && nowDraw !== wasDraw) renderPicks();
     };
     i1.addEventListener("input", onChange);
     i2.addEventListener("input", onChange);
+
+    if (showPkPicker) {
+      card.querySelectorAll(".pk-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          if (isMatchLocked(m)) { renderPicks(); return; }
+          const side = parseInt(btn.dataset.pk, 10);
+          const prev = getMatchPick(m) || {};
+          // Toggle: clicking the current pick clears it
+          const nextPk = prev.pkWinner === side ? undefined : side;
+          saveMatchPickFull(m, { score1: prev.score1, score2: prev.score2, pkWinner: nextPk });
+          card.querySelectorAll(".pk-btn").forEach(b => b.classList.toggle("is-picked", parseInt(b.dataset.pk, 10) === nextPk));
+        });
+      });
+    }
   }
 
   return card;
+}
+
+// Sets the match pick to the full {score1, score2, pkWinner?} payload. Drops the
+// entry entirely when scores are empty. Also pushes to server when logged in.
+function saveMatchPickFull(m, next) {
+  const id = matchId(m);
+  if (next.score1 === undefined && next.score2 === undefined) {
+    delete state.matchPicks[id];
+  } else {
+    const clean = { score1: next.score1, score2: next.score2 };
+    if (next.pkWinner === 1 || next.pkWinner === 2) clean.pkWinner = next.pkWinner;
+    state.matchPicks[id] = clean;
+  }
+  saveMatchPicks();
+  if (state.currentUser && userPicksSync.available) userPicksSync.saveOwn();
+}
+
+function renderPicksLeaderboard() {
+  const wrap = document.createElement("section");
+  wrap.className = "picks-leaderboard-section";
+  const rows = computeLeaderboard();
+  if (rows.length === 0) {
+    wrap.innerHTML = `
+      <h3 class="picks-lb-title">🏆 Prediction Leaderboard</h3>
+      <p class="picks-lb-empty">No one's predictions have been scored yet. Sign in and predict matches to be the first!</p>
+    `;
+    return wrap;
+  }
+  const myId = state.currentUser && state.currentUser.id;
+  const tbody = rows.slice(0, 20).map(r => {
+    const medal = r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : "";
+    const isMe = myId === r.userId;
+    return `
+      <tr class="${isMe ? "is-me" : ""} ${r.rank <= 3 ? "lb-top" : ""}">
+        <td class="lb-rank">${medal} ${r.rank}</td>
+        <td class="lb-name">${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</td>
+        <td class="lb-total">${r.total}</td>
+        <td class="lb-exact">${r.exactCount}</td>
+        <td class="lb-outcome">${r.outcomeCount}</td>
+        <td class="lb-pk">${r.pkCount}</td>
+      </tr>`;
+  }).join("");
+  wrap.innerHTML = `
+    <h3 class="picks-lb-title">🏆 Prediction Leaderboard</h3>
+    <div class="picks-lb-table-wrap">
+      <table class="picks-lb-table">
+        <thead>
+          <tr>
+            <th class="lb-rank">#</th>
+            <th class="lb-name">Player</th>
+            <th class="lb-total" title="Total points">Pts</th>
+            <th class="lb-exact" title="Exact-score predictions">Exact</th>
+            <th class="lb-outcome" title="Correct outcomes (winner / draw)">Outcome</th>
+            <th class="lb-pk" title="Correct penalty winners">PK</th>
+          </tr>
+        </thead>
+        <tbody>${tbody}</tbody>
+      </table>
+    </div>
+  `;
+  return wrap;
 }
 
 function renderTopScorers() {
@@ -2628,14 +2666,153 @@ els.tabs.forEach(t => {
   t.addEventListener("click", () => switchView(t.dataset.view));
 });
 
-function updateAdminBtn() {
-  els.adminBtn.textContent = state.isAdmin ? "🔓 Admin (logout)" : "🔒 Admin";
-  els.adminBtn.classList.toggle("is-active", state.isAdmin);
+// ===== User auth UI =====
+function updateUserBtn() {
+  if (!els.userBtn) return;
+  if (state.currentUser) {
+    els.userBtn.textContent = `👤 ${state.currentUser.name}`;
+    els.userBtn.classList.add("is-active");
+    els.userBtn.title = "Click to sign out";
+  } else {
+    els.userBtn.textContent = "👤 Sign in";
+    els.userBtn.classList.remove("is-active");
+    els.userBtn.title = "Sign in to join the prediction leaderboard";
+  }
 }
-els.adminBtn.addEventListener("click", () => {
-  if (state.isAdmin) logout();
-  else openLoginModal();
+
+function openAuthModal(mode = "signin") {
+  const existing = document.getElementById("authModal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "authModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-icon modal-icon-info">👤</div>
+      <h2 id="authTitle">${mode === "signup" ? "Create account" : "Sign in"}</h2>
+      <p class="modal-subtitle">${mode === "signup"
+        ? "Join the leaderboard. Your picks will be saved to your account."
+        : "Sign in to save picks and join the leaderboard."}</p>
+      <input type="text" id="authName" class="modal-input"
+             placeholder="Display name" autocomplete="name" spellcheck="false"
+             style="${mode === "signup" ? "" : "display:none"}; margin-bottom:8px;">
+      <input type="email" id="authEmail" class="modal-input"
+             placeholder="Email" autocomplete="email" spellcheck="false" style="margin-bottom:8px;">
+      <input type="password" id="authPassword" class="modal-input"
+             placeholder="Password (min 8 chars)" autocomplete="${mode === "signup" ? "new-password" : "current-password"}">
+      <p class="modal-error" id="authError" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="authToggle" class="modal-btn modal-btn-ghost" type="button">
+          ${mode === "signup" ? "Have an account? Sign in" : "New here? Create account"}
+        </button>
+        <button id="authSubmit" class="modal-btn modal-btn-primary" type="button">
+          ${mode === "signup" ? "Sign up" : "Sign in"}
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+
+  const err = modal.querySelector("#authError");
+  const nameEl = modal.querySelector("#authName");
+  const emailEl = modal.querySelector("#authEmail");
+  const pwEl = modal.querySelector("#authPassword");
+  const submit = async () => {
+    err.textContent = "";
+    const email = emailEl.value.trim();
+    const pw = pwEl.value;
+    if (!email || !pw) { err.textContent = "Email and password are required."; return; }
+    if (mode === "signup" && !nameEl.value.trim()) { err.textContent = "Display name is required."; return; }
+    if (pw.length < 8) { err.textContent = "Password must be at least 8 characters."; return; }
+    try {
+      const user = mode === "signup"
+        ? await appwriteAuth.signUp(email, pw, nameEl.value.trim())
+        : await appwriteAuth.logIn(email, pw);
+      if (!user) { err.textContent = "Sign-in failed. Please try again."; return; }
+      state.currentUser = user;
+      setAdmin(isUserAdmin(user)); // grant admin only if this is the owner account
+      updateUserBtn();
+      close();
+      await afterLogin();
+      rerenderActive();           // re-render so admin-only UI appears immediately
+    } catch (ex) {
+      err.textContent = (ex && ex.message) || "Authentication error.";
+    }
+  };
+
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector("#authSubmit").addEventListener("click", submit);
+  modal.querySelector("#authToggle").addEventListener("click", () => {
+    close();
+    openAuthModal(mode === "signup" ? "signin" : "signup");
+  });
+  [nameEl, emailEl, pwEl].forEach(el => el.addEventListener("keydown", e => {
+    if (e.key === "Enter") submit();
+    if (e.key === "Escape") close();
+  }));
+  setTimeout(() => (mode === "signup" ? nameEl : emailEl).focus(), 60);
+}
+
+async function logoutUser() {
+  const ok = await showConfirm(`Sign out of ${state.currentUser.name}?`, {
+    title: "Sign out", icon: "👤", iconType: "info", confirmLabel: "Sign out",
+  });
+  if (!ok) return;
+  await appwriteAuth.logOut();
+  state.currentUser = null;
+  setAdmin(false);                 // any admin powers go away with logout
+  updateUserBtn();
+  rerenderActive();                // re-render to drop admin-only controls
+}
+
+els.userBtn.addEventListener("click", () => {
+  if (state.currentUser) logoutUser();
+  else openAuthModal("signin");
 });
+
+// First-login migration: push any local picks up so the user's account adopts them.
+async function afterLogin() {
+  // Fetch the user's existing server doc (if any) to merge with local
+  const all = await userPicksSync.fetchAll();
+  state.leaderboardUsers = all;
+  const ownServerRow = all.find(u => u.userId === state.currentUser.id);
+  const localCount = Object.keys(state.matchPicks).length;
+  const serverCount = ownServerRow ? Object.keys(ownServerRow.picks).length : 0;
+
+  if (localCount > 0 && serverCount === 0) {
+    // First-time login with local picks → push them up
+    state.currentUser.firstSubmittedAt = new Date().toISOString();
+    await userPicksSync.saveOwn();
+  } else if (serverCount > 0 && localCount === 0) {
+    // Returning user, no local picks → pull server picks
+    state.matchPicks = ownServerRow.picks;
+    saveMatchPicks();
+  } else if (serverCount > 0 && localCount > 0) {
+    // Both exist — prompt user to choose
+    const useLocal = await showConfirm(
+      `You have ${localCount} picks on this device and ${serverCount} on your account. Keep this device's picks and overwrite the server?`,
+      { title: "Merge picks", icon: "🔀", iconType: "info", confirmLabel: "Use device", danger: true }
+    );
+    if (useLocal) {
+      await userPicksSync.saveOwn();
+    } else {
+      state.matchPicks = ownServerRow.picks;
+      saveMatchPicks();
+    }
+  }
+  if (state.view === "picks") renderPicks();
+}
 
 // ===== Appwrite real-time sync =====
 const APPWRITE_CONFIG = {
@@ -2644,6 +2821,7 @@ const APPWRITE_CONFIG = {
   databaseId: "6a2650420015db5d5e8a",
   resultsCollection: "matchresults",
   standingsCollection: "standingsoverrides",
+  userPicksCollection: "userpicks",
 };
 
 const appwriteSync = (() => {
@@ -2977,6 +3155,314 @@ const appwriteSync = (() => {
   };
 })();
 
+// ===== User auth + Match Predict server storage =====
+const appwriteAuth = (() => {
+  if (typeof window.Appwrite === "undefined") {
+    return {
+      available: false,
+      getCurrent: async () => null,
+      signUp: async () => { throw new Error("Auth unavailable"); },
+      logIn: async () => { throw new Error("Auth unavailable"); },
+      logOut: async () => {},
+    };
+  }
+  const { Client, Account, ID } = window.Appwrite;
+  const client = new Client()
+    .setEndpoint(APPWRITE_CONFIG.endpoint)
+    .setProject(APPWRITE_CONFIG.projectId);
+  const account = new Account(client);
+
+  async function getCurrent() {
+    try {
+      const u = await account.get();
+      return { id: u.$id, name: u.name || u.email, email: u.email };
+    } catch { return null; }
+  }
+  async function signUp(email, password, name) {
+    await account.create(ID.unique(), email, password, name);
+    await account.createEmailPasswordSession(email, password);
+    return getCurrent();
+  }
+  async function logIn(email, password) {
+    await account.createEmailPasswordSession(email, password);
+    return getCurrent();
+  }
+  async function logOut() {
+    try { await account.deleteSession("current"); } catch { /* ignore */ }
+  }
+  return { available: true, getCurrent, signUp, logIn, logOut };
+})();
+
+// ===== Compact picks encoding (fits 104 matches in < 1 KB) =====
+// Format: comma-separated tokens, one per fixture in FIXTURES order.
+//   ""       no pick
+//   "2-1"    group/KO regulation prediction
+//   "1-1p1"  KO tied prediction with PK winner = team1 (or p2 = team2)
+// Numbers are 0-99; pkWinner is "1" or "2" or absent.
+function encodeMatchPicks(picksObj) {
+  const tokens = FIXTURES.map(m => {
+    const p = picksObj[matchId(m)];
+    if (!p || p.score1 === undefined || p.score2 === undefined) return "";
+    let t = `${p.score1}-${p.score2}`;
+    if (p.pkWinner === 1 || p.pkWinner === 2) t += `p${p.pkWinner}`;
+    return t;
+  });
+  return tokens.join(",");
+}
+function decodeMatchPicks(str) {
+  const out = {};
+  if (typeof str !== "string" || !str) return out;
+  const tokens = str.split(",");
+  for (let i = 0; i < FIXTURES.length && i < tokens.length; i++) {
+    const tok = tokens[i];
+    if (!tok) continue;
+    const mr = tok.match(/^(\d{1,2})-(\d{1,2})(?:p([12]))?$/);
+    if (!mr) continue;
+    const m = FIXTURES[i];
+    out[matchId(m)] = {
+      score1: parseInt(mr[1], 10),
+      score2: parseInt(mr[2], 10),
+      ...(mr[3] ? { pkWinner: parseInt(mr[3], 10) } : {}),
+    };
+  }
+  return out;
+}
+
+// ===== User picks server sync =====
+const userPicksSync = (() => {
+  if (typeof window.Appwrite === "undefined") {
+    return {
+      available: false,
+      saveOwn: async () => {},
+      fetchAll: async () => [],
+      subscribe: () => {},
+    };
+  }
+  const { Client, Databases, Query, Permission, Role } = window.Appwrite;
+  const client = new Client()
+    .setEndpoint(APPWRITE_CONFIG.endpoint)
+    .setProject(APPWRITE_CONFIG.projectId);
+  const db = new Databases(client);
+  const COLL = APPWRITE_CONFIG.userPicksCollection;
+  const DB = APPWRITE_CONFIG.databaseId;
+
+  let knownOwnDocId = null;       // doc ID for the logged-in user's picks doc
+  let pendingSaveTimer = null;
+  const SAVE_DEBOUNCE_MS = 600;
+
+  async function saveOwn() {
+    if (!state.currentUser) return;
+    if (pendingSaveTimer) clearTimeout(pendingSaveTimer);
+    pendingSaveTimer = setTimeout(() => doSaveOwn().catch(err =>
+      console.warn("User picks save failed:", err.message || err)
+    ), SAVE_DEBOUNCE_MS);
+  }
+
+  async function doSaveOwn() {
+    if (!state.currentUser) return;
+    const uid = state.currentUser.id;
+    const payload = {
+      userId: uid,
+      userName: state.currentUser.name,
+      picks: encodeMatchPicks(state.matchPicks),
+      firstSubmittedAt: state.currentUser.firstSubmittedAt || new Date().toISOString(),
+      totalPicks: Object.keys(state.matchPicks).filter(id => {
+        const p = state.matchPicks[id];
+        return p && p.score1 !== undefined && p.score2 !== undefined;
+      }).length,
+    };
+    const perms = [
+      Permission.read(Role.any()),
+      Permission.update(Role.user(uid)),
+      Permission.delete(Role.user(uid)),
+    ];
+    if (knownOwnDocId) {
+      try {
+        await db.updateDocument(DB, COLL, knownOwnDocId, payload);
+        return;
+      } catch (err) {
+        if (err.code !== 404) {
+          console.warn("User picks update failed:", err.message || err);
+          return;
+        }
+        knownOwnDocId = null; // fall through to create
+      }
+    }
+    // Try to find existing doc for this user first
+    try {
+      const found = await db.listDocuments(DB, COLL, [Query.equal("userId", uid), Query.limit(1)]);
+      if (found.documents.length > 0) {
+        knownOwnDocId = found.documents[0].$id;
+        await db.updateDocument(DB, COLL, knownOwnDocId, payload);
+        return;
+      }
+    } catch (err) {
+      console.warn("User picks lookup failed:", err.message || err);
+    }
+    // Create new doc
+    try {
+      const created = await db.createDocument(DB, COLL, window.Appwrite.ID.unique(), payload, perms);
+      knownOwnDocId = created.$id;
+      // Remember firstSubmittedAt so subsequent saves keep the original time
+      state.currentUser.firstSubmittedAt = payload.firstSubmittedAt;
+    } catch (err) {
+      console.warn("User picks create failed:", err.message || err);
+    }
+  }
+
+  async function fetchAll() {
+    const all = [];
+    try {
+      let offset = 0;
+      while (true) {
+        const page = await db.listDocuments(DB, COLL, [Query.limit(100), Query.offset(offset)]);
+        for (const doc of page.documents) {
+          all.push({
+            userId: doc.userId,
+            userName: doc.userName,
+            picks: decodeMatchPicks(doc.picks || ""),
+            firstSubmittedAt: doc.firstSubmittedAt || doc.$createdAt,
+            totalPicks: doc.totalPicks || 0,
+          });
+          if (state.currentUser && doc.userId === state.currentUser.id) {
+            knownOwnDocId = doc.$id;
+            state.currentUser.firstSubmittedAt = doc.firstSubmittedAt || doc.$createdAt;
+          }
+        }
+        if (page.documents.length < 100) break;
+        offset += 100;
+      }
+    } catch (err) {
+      console.warn("User picks fetchAll failed:", err.message || err);
+    }
+    return all;
+  }
+
+  function subscribe() {
+    try {
+      client.subscribe(`databases.${DB}.collections.${COLL}.documents`, (msg) => {
+        const doc = msg.payload;
+        if (!doc) return;
+        const events = (msg.events || []).join(" ");
+        const isDelete = events.includes(".delete");
+        const idx = state.leaderboardUsers.findIndex(u => u.userId === doc.userId);
+        if (isDelete) {
+          if (idx >= 0) state.leaderboardUsers.splice(idx, 1);
+        } else {
+          const row = {
+            userId: doc.userId,
+            userName: doc.userName,
+            picks: decodeMatchPicks(doc.picks || ""),
+            firstSubmittedAt: doc.firstSubmittedAt || doc.$createdAt,
+            totalPicks: doc.totalPicks || 0,
+          };
+          if (idx >= 0) state.leaderboardUsers[idx] = row;
+          else state.leaderboardUsers.push(row);
+        }
+        if (state.view === "picks") renderPicks();
+      });
+    } catch (err) {
+      console.warn("User picks subscribe failed:", err.message || err);
+    }
+  }
+
+  return { available: true, saveOwn, fetchAll, subscribe };
+})();
+
+// ===== Scoring engine =====
+const STAGE_MULTIPLIERS = {
+  group: 1.0,
+  r32:   1.1,
+  r16:   1.25,
+  qf:    1.5,
+  sf:    2.0,
+  third: 2.0,
+  final: 3.0,
+};
+
+// Returns { exact, outcome, diff, pkBonus, basePoints, awarded } or null when no points apply yet.
+function scoreMatchPick(pick, result, m) {
+  if (!pick || pick.score1 === undefined || pick.score2 === undefined) return null;
+  if (!result || result.score1 === undefined || result.score2 === undefined) return null;
+
+  const exact = pick.score1 === result.score1 && pick.score2 === result.score2;
+  let basePoints = 0;
+  let outcome = false;
+  let diff = false;
+
+  if (exact) {
+    basePoints = 15;
+  } else {
+    const pickWinner = pick.score1 > pick.score2 ? 1 : pick.score2 > pick.score1 ? 2 : 0;
+    const actualWinner = result.score1 > result.score2 ? 1 : result.score2 > result.score1 ? 2 : 0;
+    if (pickWinner === actualWinner) { basePoints += 5; outcome = true; }
+    if ((pick.score1 - pick.score2) === (result.score1 - result.score2)) { basePoints += 3; diff = true; }
+  }
+
+  // Penalty bonus: only when actual match went to PKs (KO + regulation tied + PKs entered)
+  let pkBonus = 0;
+  const isKO = m.stage !== "group";
+  const wentToPK = isKO
+    && result.score1 === result.score2
+    && result.pen1 !== undefined && result.pen2 !== undefined
+    && result.pen1 !== result.pen2;
+  if (wentToPK) {
+    const actualPkWinner = result.pen1 > result.pen2 ? 1 : 2;
+    if (pick.pkWinner === actualPkWinner) pkBonus = 5;
+  }
+
+  const mul = STAGE_MULTIPLIERS[m.stage] || 1;
+  const awarded = Math.round((basePoints + pkBonus) * mul);
+  return { exact, outcome, diff, pkBonus, basePoints, awarded };
+}
+
+function computeUserLeaderboardRow(user) {
+  let total = 0;
+  let exactCount = 0;
+  let outcomeCount = 0;
+  let pkCount = 0;
+  for (const m of FIXTURES) {
+    const pick = user.picks[matchId(m)];
+    const result = state.results[matchId(m)];
+    const s = scoreMatchPick(pick, result, m);
+    if (!s) continue;
+    total += s.awarded;
+    if (s.exact) exactCount++;
+    if (s.outcome) outcomeCount++;
+    if (s.pkBonus > 0) pkCount++;
+  }
+  return {
+    userId: user.userId,
+    userName: user.userName,
+    total,
+    exactCount,
+    outcomeCount,
+    pkCount,
+    firstSubmittedAt: user.firstSubmittedAt || "",
+  };
+}
+
+function computeLeaderboard() {
+  const rows = state.leaderboardUsers.map(computeUserLeaderboardRow);
+  rows.sort((a, b) =>
+    b.total - a.total
+    || b.exactCount - a.exactCount
+    || b.outcomeCount - a.outcomeCount
+    || b.pkCount - a.pkCount
+    || (a.firstSubmittedAt || "").localeCompare(b.firstSubmittedAt || "")
+    || a.userName.localeCompare(b.userName)
+  );
+  // Assign ranks with ties
+  let lastKey = null;
+  let lastRank = 0;
+  rows.forEach((r, i) => {
+    const key = `${r.total}|${r.exactCount}|${r.outcomeCount}|${r.pkCount}`;
+    if (key !== lastKey) { lastRank = i + 1; lastKey = key; }
+    r.rank = lastRank;
+  });
+  return rows;
+}
+
 // ===== Cache versioning =====
 // Stores the data shape (counts + newest doc $updatedAt) at the time of the
 // last successful sync. On the next page load we only do a full bootstrap if
@@ -3017,11 +3503,36 @@ function bumpCacheVersionFromEvent(collectionType, doc) {
 
 // --- Init ---
 applyAdminClass();
-updateAdminBtn();
+updateUserBtn();
 populateTeams();
 populateTimezones();
 populateDates();
 render();
+
+// Restore Appwrite auth session (if any) + bootstrap leaderboard data
+if (appwriteAuth.available) {
+  appwriteAuth.getCurrent().then(user => {
+    if (user) {
+      state.currentUser = user;
+      setAdmin(isUserAdmin(user));    // restore admin status from user identity
+      updateUserBtn();
+    }
+    return userPicksSync.fetchAll();
+  }).then(all => {
+    state.leaderboardUsers = all || [];
+    // If logged in, hydrate local matchPicks from server doc (overwrites local with server)
+    if (state.currentUser) {
+      const own = state.leaderboardUsers.find(u => u.userId === state.currentUser.id);
+      if (own) {
+        state.matchPicks = own.picks;
+        saveMatchPicks();
+      }
+    }
+    // Re-render the active view in case admin restoration added new controls
+    rerenderActive();
+    userPicksSync.subscribe();
+  }).catch(err => console.warn("Auth/leaderboard bootstrap failed:", err.message || err));
+}
 
 // Shared prediction link handler: someone opened the site with #pred=… in the URL.
 // View-only mode — load into state.sharedPrediction so the user's own picks stay safe.
