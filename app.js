@@ -1523,10 +1523,7 @@ function renderPicks() {
     banner.querySelector("#picksSignUpBtn").addEventListener("click", () => openAuthModal("signup"));
   }
 
-  // Leaderboard (always shown — viewers can browse without signing in)
-  view.appendChild(renderPicksLeaderboard());
-
-  // Header with intro + counter + reset
+  // Header with intro + counter + action buttons
   const total = FIXTURES.length;
   const filled = Object.keys(state.matchPicks).filter(id =>
     state.matchPicks[id].score1 !== undefined && state.matchPicks[id].score2 !== undefined
@@ -1534,14 +1531,29 @@ function renderPicks() {
   const header = document.createElement("div");
   header.className = "predict-header";
   const savedNote = state.currentUser ? " (synced to your account)" : " (this device only)";
+  const lbLabel = state.showLeaderboard ? "🏆 Hide leaderboard" : "🏆 Leaderboard";
   header.innerHTML = `
     <p>Predict the final score of every match. Locks at each match's kickoff.
        <strong style="color: var(--accent-2)">${filled}/${total}</strong> filled in${savedNote}.</p>
     <div class="predict-header-actions">
+      <button type="button" id="picksLeaderboardBtn" class="action-btn${state.showLeaderboard ? " is-active" : ""}">${lbLabel}</button>
+      <button type="button" id="picksRulesBtn" class="action-btn">📖 Rules</button>
       <button type="button" id="picksResetBtn" class="danger-btn">Reset all picks</button>
     </div>
   `;
   view.appendChild(header);
+  header.querySelector("#picksLeaderboardBtn").addEventListener("click", () => {
+    state.showLeaderboard = !state.showLeaderboard;
+    renderPicks();
+    // Scroll into view if just opened, so user can see it without hunting
+    if (state.showLeaderboard) {
+      requestAnimationFrame(() => {
+        const lb = view.querySelector(".picks-leaderboard-section");
+        if (lb && lb.scrollIntoView) lb.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  });
+  header.querySelector("#picksRulesBtn").addEventListener("click", openRulesModal);
   header.querySelector("#picksResetBtn").addEventListener("click", async () => {
     const ok = await showConfirm("Clear every score prediction in this device?", {
       title: "Reset picks",
@@ -1555,6 +1567,9 @@ function renderPicks() {
     if (state.currentUser) userPicksSync.saveOwn();
     renderPicks();
   });
+
+  // Leaderboard renders inline only when toggled on
+  if (state.showLeaderboard) view.appendChild(renderPicksLeaderboard());
 
   // Group matches by date in selected tz, like the schedule view
   const tz = state.selectedTz;
@@ -1710,6 +1725,97 @@ function saveMatchPickFull(m, next) {
   }
   saveMatchPicks();
   if (state.currentUser && userPicksSync.available) userPicksSync.saveOwn();
+}
+
+function openRulesModal() {
+  const existing = document.getElementById("rulesModal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "rulesModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog rules-modal" role="dialog" aria-modal="true" aria-labelledby="rulesTitle">
+      <div class="modal-icon modal-icon-info">📖</div>
+      <h2 id="rulesTitle">Prediction Rules</h2>
+      <div class="rules-body">
+        <section>
+          <h3>How to play</h3>
+          <ul>
+            <li>Predict the final regulation score of every match before its kickoff.</li>
+            <li>Picks <strong>cannot be edited after kickoff</strong> — they lock automatically.</li>
+            <li>One prediction per user per match.</li>
+            <li>For knockout matches predicted as a draw, also pick the <strong>penalty shootout winner</strong>.</li>
+          </ul>
+        </section>
+        <section>
+          <h3>Base points</h3>
+          <table class="rules-table">
+            <tr><th>Outcome</th><th>Points</th></tr>
+            <tr><td><strong>Exact score</strong> (e.g. picked 2-1, actual 2-1)</td><td class="rules-pts">15</td></tr>
+            <tr><td><strong>Correct winner / draw</strong> only</td><td class="rules-pts">5</td></tr>
+            <tr><td><strong>Correct goal difference</strong> only</td><td class="rules-pts">3</td></tr>
+            <tr><td><strong>Correct winner AND goal difference</strong> (not exact)</td><td class="rules-pts">8</td></tr>
+          </table>
+          <p class="rules-note">If the exact score is correct, only the 15 points apply — outcome/diff are not added on top.</p>
+        </section>
+        <section>
+          <h3>Penalty shootout bonus</h3>
+          <p>Applies only to KO matches that actually go to penalties. If the user's predicted PK winner matches the actual PK winner: <strong>+5 bonus points</strong>. Ignored when no shootout happens.</p>
+        </section>
+        <section>
+          <h3>Stage multipliers</h3>
+          <table class="rules-table">
+            <tr><th>Stage</th><th>Multiplier</th></tr>
+            <tr><td>Group Stage</td><td class="rules-pts">×1.0</td></tr>
+            <tr><td>Round of 32</td><td class="rules-pts">×1.1</td></tr>
+            <tr><td>Round of 16</td><td class="rules-pts">×1.25</td></tr>
+            <tr><td>Quarterfinal</td><td class="rules-pts">×1.5</td></tr>
+            <tr><td>Semifinal</td><td class="rules-pts">×2.0</td></tr>
+            <tr><td>Third-Place Match</td><td class="rules-pts">×2.0</td></tr>
+            <tr><td>Final</td><td class="rules-pts">×3.0</td></tr>
+          </table>
+          <p class="rules-note">Awarded = <code>round((Base + PK Bonus) × Multiplier)</code></p>
+        </section>
+        <section>
+          <h3>Examples</h3>
+          <ul class="rules-examples">
+            <li><strong>Group, picked 2-1, actual 2-1</strong> → 15 × 1.0 = <strong>15 pts</strong></li>
+            <li><strong>QF, picked 3-2, actual 2-1</strong> → outcome 5 + diff 3 = 8; 8 × 1.5 = <strong>12 pts</strong></li>
+            <li><strong>Final, picked 1-1 with PK Argentina, actual 1-1, PK Argentina</strong> → (15 + 5) × 3.0 = <strong>60 pts</strong></li>
+          </ul>
+        </section>
+        <section>
+          <h3>Leaderboard tiebreakers</h3>
+          <ol>
+            <li>Total points (highest first)</li>
+            <li>Exact-score predictions</li>
+            <li>Correct outcomes</li>
+            <li>Correct penalty predictions</li>
+            <li>Earliest first-prediction time</li>
+          </ol>
+        </section>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-primary" id="rulesCloseBtn" type="button">Got it</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector("#rulesCloseBtn").addEventListener("click", close);
+  modal.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  setTimeout(() => modal.querySelector("#rulesCloseBtn").focus(), 60);
 }
 
 function renderPicksLeaderboard() {
