@@ -360,9 +360,13 @@ function getResult(m) {
   if (!live) return manual;
   if (live.isLive) return live;   // in play: the FIFA feed wins
   if (!manual) return live;       // no admin entry yet: show the API result
-  // Admin entry is canonical after FT; just fill a missing scorers list
+  // Admin entry is canonical after FT; fill a missing scorers list, but only
+  // when both agree on the score — otherwise the card would contradict itself
+  // (e.g. a manual 0:0 showing the API's three scorers).
   if ((!Array.isArray(manual.scorers) || manual.scorers.length === 0) &&
-      Array.isArray(live.scorers) && live.scorers.length > 0) {
+      Array.isArray(live.scorers) && live.scorers.length > 0 &&
+      Number(manual.score1) === Number(live.score1) &&
+      Number(manual.score2) === Number(live.score2)) {
     return { ...manual, scorers: live.scorers };
   }
   return manual;
