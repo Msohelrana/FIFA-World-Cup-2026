@@ -519,7 +519,8 @@ function renderMatchCard(m, highlightTeam, ko) {
   const countdownChip = cd.state === "ended"
     ? ""
     : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
-  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${localTime}</span>${countdownChip}</div>`;
+  const timeText = cd.state === "ended" ? "FT" : localTime;
+  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${timeText}</span>${countdownChip}</div>`;
   if (cd.state === "live") card.classList.add("is-live");
   card.dataset.kickoff = String(kickoffUtcMs);
   card.dataset.stage = m.stage;       // ticker uses this to pick the right LIVE window
@@ -1622,7 +1623,8 @@ function renderPickCard(m, ko) {
     ? ""
     : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
   const stageBadge = `<span class="stage-badge ${m.stage}">${stageLabel}</span>`;
-  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${localTime}</span>${countdownChip}</div>`;
+  const timeText = cd.state === "ended" ? "FT" : localTime;
+  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${timeText}</span>${countdownChip}</div>`;
   if (cd.state === "live") card.classList.add("is-live");
   card.dataset.kickoff = String(kickoffUtcMs);
   card.dataset.stage = m.stage;
@@ -3669,6 +3671,10 @@ function tickCountdowns() {
     const stage = card.dataset.stage || "group";
     const cdFinal = formatCountdownDirect(kickoff, stage, now);
     card.classList.toggle("is-live", cdFinal.state === "live");
+    if (cdFinal.state === "ended") {
+      const t = card.querySelector(".match-time");
+      if (t && t.textContent !== "FT") t.textContent = "FT";
+    }
     const chip = card.querySelector(".match-countdown");
     if (!chip) {
       if (cdFinal.state !== "ended") {
