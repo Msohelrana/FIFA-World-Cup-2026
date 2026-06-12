@@ -4102,13 +4102,30 @@ function archiveFinishedApiResults() {
 }
 
 if (typeof liveScores !== "undefined") {
-  liveScores.start((changed) => {
+  let lastLiveKo = ""; // knockout assignments at last poll, serialized
+  liveScores.start((changedIds) => {
     const archived = archiveFinishedApiResults();
-    if (!changed && !archived) return;
+    if (!changedIds.length && !archived) return;
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest(".result-row, .scorer-form")) return;
-    rerenderActive();
+    if (state.view !== "schedule") { rerenderActive(); return; }
+    // Schedule view: replace only the changed match cards — unless knockout
+    // assignments shifted, which can rename teams in unrelated cards.
+    const ko = getKnockoutAssignments();
+    const koJSON = JSON.stringify(ko);
+    if (koJSON !== lastLiveKo) {
+      lastLiveKo = koJSON;
+      rerenderActive();
+      return;
+    }
+    for (const id of changedIds) {
+      const row = document.querySelector(`.result-row[data-mid="${CSS.escape(id)}"]`);
+      const card = row && row.closest(".match-card");
+      if (!card) continue; // not rendered under the current filters
+      const m = FIXTURES.find((fx) => matchId(fx) === id);
+      if (m) card.replaceWith(renderMatchCard(m, state.selectedTeam, ko));
+    }
   });
 }
 
@@ -4132,13 +4149,17 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
       })
       .catch((err) => console.warn("Service worker registration failed:", err));
 
-    // When the active SW changes (new version took over), reload once so the app
-    // picks up fresh assets. Guard against the reload loop with a session flag.
-    let reloaded = false;
+    // When the active SW changes (new version took over), offer a refresh
+    // instead of yanking the page out from under the user.
+    let toastShown = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloaded) return;
-      reloaded = true;
-      window.location.reload();
+      if (toastShown) return;
+      toastShown = true;
+      const t = document.createElement("div");
+      t.className = "update-toast";
+      t.innerHTML = `<span>✨ New version available</span><button type="button">Refresh</button>`;
+      t.querySelector("button").addEventListener("click", () => window.location.reload());
+      document.body.appendChild(t);
     });
   });
 }
