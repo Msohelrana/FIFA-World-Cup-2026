@@ -3813,37 +3813,48 @@ if (appwriteSync.available) {
 
 // ===== Live scores (unofficial FIFA API overlay — see live-scores.js) =====
 
-// Admin housekeeping: once the FIFA API has the final result of a match and
-// the manual entry agrees with it (same score + pens), the manual copy is
-// redundant — drop it locally and from Appwrite so the API overlay serves it.
-// Entries that DISAGREE with the API are kept: those are deliberate
-// corrections and must keep shadowing the feed.
-function pruneRedundantManualEntries() {
+// Admin housekeeping: once a match is FINISHED, persist the FIFA API result
+// into the regular store (local + Appwrite). Appwrite then keeps serving the
+// result to every visitor even if the unofficial API breaks later.
+// Existing entries are never overwritten — admin corrections always win —
+// except to fill a missing scorers list when both agree on the score.
+function archiveFinishedApiResults() {
   if (!state.isAdmin || typeof liveScores === "undefined") return 0;
-  let removed = 0;
-  for (const id of Object.keys(state.results)) {
+  let archived = 0;
+  for (const m of FIXTURES) {
+    const id = matchId(m);
     const live = liveScores.get(id);
-    if (!live || live.isLive) continue;
-    const manual = state.results[id];
-    if (Number(manual.score1) !== Number(live.score1) ||
-        Number(manual.score2) !== Number(live.score2)) continue;
-    if ((manual.pen1 ?? null) !== (live.pen1 ?? null) ||
-        (manual.pen2 ?? null) !== (live.pen2 ?? null)) continue;
-    delete state.results[id];
+    if (!live || live.isLive) continue;     // no API data, or not finished yet
+    const existing = state.results[id];
+    if (existing) {
+      if ((!Array.isArray(existing.scorers) || existing.scorers.length === 0) &&
+          Array.isArray(live.scorers) && live.scorers.length > 0 &&
+          Number(existing.score1) === Number(live.score1) &&
+          Number(existing.score2) === Number(live.score2)) {
+        state.results[id] = { ...existing, scorers: live.scorers };
+        appwriteSync.scheduleMatch(id);
+        archived++;
+      }
+      continue;
+    }
+    const rec = { score1: live.score1, score2: live.score2 };
+    if (live.pen1 !== undefined) { rec.pen1 = live.pen1; rec.pen2 = live.pen2; }
+    if (Array.isArray(live.scorers) && live.scorers.length) rec.scorers = live.scorers;
+    state.results[id] = rec;
     appwriteSync.scheduleMatch(id);
-    removed++;
+    archived++;
   }
-  if (removed) {
+  if (archived) {
     saveResults();
-    console.log(`Live scores: pruned ${removed} manual entr${removed === 1 ? "y" : "ies"} now covered by the FIFA API.`);
+    console.log(`Live scores: archived ${archived} final result(s) to Appwrite.`);
   }
-  return removed;
+  return archived;
 }
 
 if (typeof liveScores !== "undefined") {
   liveScores.start((changed) => {
-    const pruned = pruneRedundantManualEntries();
-    if (!changed && !pruned) return;
+    const archived = archiveFinishedApiResults();
+    if (!changed && !archived) return;
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest(".result-row, .scorer-form")) return;

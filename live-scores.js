@@ -226,7 +226,7 @@ const liveScores = (() => {
     const changed = snapshot !== lastSnapshot;
     if (changed) lastSnapshot = snapshot;
     // Always notify (not only on change): the app also runs admin
-    // housekeeping after each poll, e.g. pruning redundant manual entries.
+    // housekeeping after each poll (archiving finished results to Appwrite).
     if (onUpdate) onUpdate(changed);
 
     if (anyLive) return POLL_LIVE_MS;
