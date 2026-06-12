@@ -209,6 +209,8 @@ body.is-viewer .score-input:disabled {
 
 /* ---------- Modal (login) ---------- */
 body.modal-open { overflow: hidden; }
+/* Mobile: body overflow alone doesn't stop touch-scrolling the page behind */
+html:has(body.modal-open) { overflow: hidden; overscroll-behavior: none; }
 
 .modal {
   position: fixed;
@@ -235,6 +237,7 @@ body.modal-open { overflow: hidden; }
 .modal-backdrop {
   position: absolute;
   inset: 0;
+  touch-action: none;
   background: rgba(7, 11, 24, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -684,6 +687,7 @@ body.modal-open { overflow: hidden; }
 .stats-body {
   max-height: 60vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 12px 0 4px;
 }
 .stats-msg { color: var(--text-dim); font-size: 13px; margin: 18px 0; }
