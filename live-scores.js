@@ -38,7 +38,7 @@ const liveScores = (() => {
     "Congo DR": "DR Congo",
   };
 
-  const POLL_LIVE_MS = 60 * 1000;        // something is in play
+  const POLL_LIVE_MS = 30 * 1000;        // something is in play
   const POLL_IDLE_MS = 10 * 60 * 1000;   // nothing live right now
   const TIMELINE_RECENT_MS = 48 * 36e5;  // fetch scorers for matches < 48h old
   const KICKOFF_TOLERANCE_MS = 90 * 60 * 1000;
@@ -208,10 +208,18 @@ const liveScores = (() => {
     return calMatches;
   }
 
+  // Live timelines are heavier than scores: refetch them only every other
+  // 30s tick (or immediately when a score changes), reusing the last parse
+  // in between. IdMatch → {scorers, cards}.
+  const liveTL = new Map();
+  let pollCount = 0;
+
   // One poll: calendar (cached), then timelines only for live matches +
   // recently-finished ones not yet cached.
   async function poll() {
     const now = Date.now();
+    const tlTick = (++pollCount) % 2 === 1; // timelines on every other poll
+    const prevOverlay = new Map(overlay);
     let matches = (calMatches && now - calAt < CALENDAR_TTL_MS)
       ? calMatches
       : await fetchCalendar();
@@ -286,9 +294,17 @@ const liveScores = (() => {
       // refreshed every poll while live. Legacy cache entries (a bare scorers
       // array, pre-cards) are refetched while recent to pick up cards.
       const cached = scorerCache[fm.IdMatch];
+      const prevRec = prevOverlay.get(matchId(fixture));
+      const scoreChanged = prevRec &&
+        (prevRec.score1 !== rec.score1 || prevRec.score2 !== rec.score2);
+      const tl = liveTL.get(fm.IdMatch);
       if (finished && cached && !Array.isArray(cached)) {
         if (cached.scorers && cached.scorers.length) rec.scorers = cached.scorers;
         if (cached.cards && cached.cards.length) rec.cards = cached.cards;
+      } else if (isLive && tl && !tlTick && !scoreChanged) {
+        // off-tick: reuse the last timeline parse
+        if (tl.scorers.length) rec.scorers = tl.scorers;
+        if (tl.cards.length) rec.cards = tl.cards;
       } else if (isLive || (finished && now - kickoff < TIMELINE_RECENT_MS)) {
         const rt = resolveMatchTeams(fixture, ko);
         timelineJobs.push({
@@ -311,6 +327,7 @@ const liveScores = (() => {
         const cards = parseCards(tl, t1, t2);
         if (scorers.length) rec.scorers = scorers;
         if (cards.length) rec.cards = cards;
+        liveTL.set(fm.IdMatch, { scorers, cards });
         if (finished) {
           scorerCache[fm.IdMatch] = { scorers, cards };
           cacheDirty = true;
