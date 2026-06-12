@@ -595,6 +595,120 @@ body.modal-open { overflow: hidden; }
 .venue::before {
   content: "📍 ";
 }
+.stats-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.18), rgba(106, 76, 147, 0.22));
+  color: var(--accent-2);
+  border: 1px solid rgba(76, 201, 240, 0.35);
+  border-radius: 999px;
+  padding: 4px 13px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.stats-btn:hover {
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.32), rgba(106, 76, 147, 0.36));
+  border-color: var(--accent-2);
+  box-shadow: 0 0 14px rgba(76, 201, 240, 0.3);
+  transform: translateY(-1px);
+}
+.stats-btn:active { transform: translateY(0); box-shadow: none; }
+
+/* Match Stats modal */
+.stats-modal { max-width: 440px; }
+.stats-teams {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+.stats-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 14px;
+}
+.stats-team.right { flex-direction: row-reverse; }
+.stats-team .flag-img { flex-shrink: 0; }
+.stats-team-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stats-vs {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+.stats-body {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 12px 0 4px;
+}
+.stats-msg { color: var(--text-dim); font-size: 13px; margin: 18px 0; }
+.stat-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--accent-2);
+  overflow: hidden;
+  margin: 2px 2px 10px;
+}
+.stat-bar span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+}
+.stat-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 2px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.stat-row:last-of-type { border-bottom: none; }
+.stat-row .stat-v {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.stat-row .stat-v:first-child { text-align: left; }
+.stat-row .stat-v:last-child { text-align: right; }
+.stat-row .stat-label {
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+.stats-bookings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+}
+.booking-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+.booking-col.right { align-items: flex-end; }
+.booking-col .booking { text-align: left; }
+.booking-col.right .booking { text-align: right; }
 
 .match-card.single {
   text-align: center;
@@ -727,6 +841,30 @@ body.modal-open { overflow: hidden; }
   border-style: solid;
 }
 .scorer-add-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Admin per-card edit toggle (in the match-meta row) */
+.card-edit-btn {
+  background: transparent;
+  color: var(--accent-2);
+  border: 1px dashed rgba(76, 201, 240, 0.4);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.card-edit-btn:hover {
+  background: rgba(76, 201, 240, 0.12);
+  border-style: solid;
+}
+.card-edit-btn.is-editing {
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.5);
+}
+.card-edit-btn.is-editing:hover {
+  background: rgba(74, 222, 128, 0.12);
+}
 
 .scorer-form {
   display: flex;

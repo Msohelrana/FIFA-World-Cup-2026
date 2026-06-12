@@ -360,14 +360,22 @@ function getResult(m) {
   if (!live) return manual;
   if (live.isLive) return live;   // in play: the FIFA feed wins
   if (!manual) return live;       // no admin entry yet: show the API result
-  // Admin entry is canonical after FT; fill a missing scorers list, but only
-  // when both agree on the score — otherwise the card would contradict itself
-  // (e.g. a manual 0:0 showing the API's three scorers).
-  if ((!Array.isArray(manual.scorers) || manual.scorers.length === 0) &&
-      Array.isArray(live.scorers) && live.scorers.length > 0 &&
-      Number(manual.score1) === Number(live.score1) &&
+  // Admin entry is canonical after FT; fill missing scorers/cards from the
+  // API, but only when both agree on the score — otherwise the card would
+  // contradict itself (e.g. a manual 0:0 showing the API's three scorers).
+  if (Number(manual.score1) === Number(live.score1) &&
       Number(manual.score2) === Number(live.score2)) {
-    return { ...manual, scorers: live.scorers };
+    const merged = { ...manual };
+    let filled = false;
+    if ((!Array.isArray(manual.scorers) || manual.scorers.length === 0) &&
+        Array.isArray(live.scorers) && live.scorers.length > 0) {
+      merged.scorers = live.scorers; filled = true;
+    }
+    if ((!Array.isArray(manual.cards) || manual.cards.length === 0) &&
+        Array.isArray(live.cards) && live.cards.length > 0) {
+      merged.cards = live.cards; filled = true;
+    }
+    if (filled) return merged;
   }
   return manual;
 }
@@ -515,6 +523,13 @@ function formatCountdown(m, nowMs = Date.now()) {
   return { state: "ended", text: "" };
 }
 
+// Per-card edit mode: even for the admin, result inputs and scorer buttons
+// stay locked until ✏ Edit is clicked on that card (session-only, in-memory).
+const editingCards = new Set();
+function isCardEditing(mid) {
+  return state.isAdmin && editingCards.has(mid);
+}
+
 // Live-API override: the real match minute beats the time-window heuristic.
 function applyLiveChip(mid, cd) {
   const live = (typeof liveScores !== "undefined" && mid) ? liveScores.get(mid) : null;
@@ -545,7 +560,11 @@ function renderMatchCard(m, highlightTeam, ko) {
     ? ""
     : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
   const timeText = cd.state === "ended" ? "FT" : localTime;
-  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${timeText}</span>${countdownChip}</div>`;
+  const editing = isCardEditing(matchId(m));
+  const editBtn = state.isAdmin
+    ? `<button type="button" class="card-edit-btn${editing ? " is-editing" : ""}" title="${editing ? "Finish editing this result" : "Edit this result"}">${editing ? "✓ Done" : "✏ Edit"}</button>`
+    : "";
+  const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${timeText}</span>${countdownChip}${editBtn}</div>`;
   if (cd.state === "live") card.classList.add("is-live");
   card.dataset.kickoff = String(kickoffUtcMs);
   card.dataset.stage = m.stage;       // ticker uses this to pick the right LIVE window
@@ -570,7 +589,7 @@ function renderMatchCard(m, highlightTeam, ko) {
 
   // For knockouts, always render PK inputs but disable them unless regulation is tied
   // (and unconditionally disable for viewers in read-only mode).
-  const penDisabled = (tied && state.isAdmin) ? "" : "disabled";
+  const penDisabled = (tied && editing) ? "" : "disabled";
   const penInputs = isKnockout
     ? `<span class="pen-block ${tied ? "" : "is-disabled"}">PK
         <input type="number" min="0" max="99" class="score-input pen-input pen1" value="${p1}" placeholder="–" aria-label="${displayTeam1} penalty score" ${penDisabled}>
@@ -580,7 +599,7 @@ function renderMatchCard(m, highlightTeam, ko) {
     : "";
 
   const winnerLabel = resultLabel(m, r, displayTeam1, displayTeam2);
-  const lockedAttr = state.isAdmin ? "" : "disabled";
+  const lockedAttr = editing ? "" : "disabled";
   const resultHTML = `
     <div class="result-row" data-mid="${matchId(m)}">
       <input type="number" min="0" max="99" class="score-input score1" value="${s1}" placeholder="–" aria-label="${displayTeam1} score" ${lockedAttr}>
@@ -592,9 +611,30 @@ function renderMatchCard(m, highlightTeam, ko) {
 
   const scorersHTML = `<div class="scorers-row" data-mid="${matchId(m)}"></div>`;
 
-  const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span></div>`;
+  // Match Stats button: only when the FIFA overlay can resolve this match's
+  // stats feed (started matches with known team ids — see liveScores.getStats)
+  const liveRec = (typeof liveScores !== "undefined") ? liveScores.get(matchId(m)) : null;
+  const statsBtnHTML = (liveRec && liveRec.statsId && liveRec.idTeam1 && liveRec.idTeam2)
+    ? `<button type="button" class="stats-btn">📊 Match Stats</button>`
+    : "";
+  const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span>${statsBtnHTML}</div>`;
 
   card.innerHTML = meta + teamsHTML + resultHTML + scorersHTML + footer;
+
+  const editBtnEl = card.querySelector(".card-edit-btn");
+  if (editBtnEl) {
+    editBtnEl.addEventListener("click", () => {
+      const id = matchId(m);
+      if (editingCards.has(id)) editingCards.delete(id);
+      else editingCards.add(id);
+      card.replaceWith(renderMatchCard(m, highlightTeam, ko));
+    });
+  }
+
+  const statsBtnEl = card.querySelector(".stats-btn");
+  if (statsBtnEl) {
+    statsBtnEl.addEventListener("click", () => showMatchStats(m, displayTeam1, displayTeam2));
+  }
 
   wireScoreInputs(card, m, displayTeam1, displayTeam2, teamsKnown);
   renderScorersBlock(card, m, displayTeam1, displayTeam2, teamsKnown);
@@ -605,6 +645,12 @@ function renderMatchCard(m, highlightTeam, ko) {
 function getScorers(m) {
   const r = getResult(m);
   return (r && Array.isArray(r.scorers)) ? r.scorers : [];
+}
+
+// Bookings come only from the FIFA API (no manual admin entry) — display-only.
+function getCards(m) {
+  const r = getResult(m);
+  return (r && Array.isArray(r.cards)) ? r.cards : [];
 }
 
 // Collect unique scorer names previously recorded for a given team across all matches.
@@ -702,7 +748,7 @@ function renderScorersBlock(card, m, t1, t2, teamsKnown) {
   const block = card.querySelector(".scorers-row");
   if (!block) return;
   const scorers = getScorers(m);
-  const admin = state.isAdmin;
+  const admin = isCardEditing(matchId(m));
 
   // Viewer mode + no scorers → render nothing (keeps the card tight)
   if (!admin && scorers.length === 0) {
@@ -1118,15 +1164,29 @@ function computeStandings(groupLetter) {
   const teams = GROUPS[groupLetter];
   const stats = {};
   teams.forEach(t => {
-    stats[t] = { team: t, played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, gd: 0, points: 0 };
+    stats[t] = { team: t, played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, gd: 0, points: 0, fp: 0 };
   });
 
+  const playedMatches = []; // for head-to-head tiebreaks
   for (const m of FIXTURES) {
     if (m.stage !== "group" || m.group !== groupLetter) continue;
     const r = getResult(m);
     if (!r || r.score1 === undefined || r.score2 === undefined) continue;
     const a = stats[m.team1], b = stats[m.team2];
     if (!a || !b) continue;
+    playedMatches.push({ t1: m.team1, t2: m.team2, s1: r.score1, s2: r.score2 });
+    // Fair play points (FIFA: yellow −1, second yellow −3, red −4, yellow+red −5)
+    if (Array.isArray(r.cards)) {
+      const byPlayer = {};
+      for (const c of r.cards) {
+        const p = byPlayer[c.team + "|" + c.name] || (byPlayer[c.team + "|" + c.name] = { side: c.team, y: 0, yr: 0, rd: 0 });
+        p[c.card === "yellow" ? "y" : c.card === "yellowred" ? "yr" : "rd"]++;
+      }
+      for (const k in byPlayer) {
+        const p = byPlayer[k];
+        (p.side === 1 ? a : b).fp -= (p.rd && p.y) ? 5 : p.rd ? 4 : p.yr ? 3 : 1;
+      }
+    }
     a.played++; b.played++;
     a.gf += r.score1; a.ga += r.score2;
     b.gf += r.score2; b.ga += r.score1;
@@ -1147,6 +1207,37 @@ function computeStandings(groupLetter) {
       x.team.localeCompare(y.team)
     )
     : Object.values(stats).sort((x, y) => x.team.localeCompare(y.team));
+
+  // FIFA tiebreakers beyond GF: re-rank runs tied on points/GD/GF by
+  // head-to-head (points, GD, GF among the tied teams), then fair play.
+  if (groupHasAnyResult) {
+    for (let i = 0; i < sorted.length; ) {
+      let j = i + 1;
+      while (j < sorted.length && sorted[j].points === sorted[i].points &&
+             sorted[j].gd === sorted[i].gd && sorted[j].gf === sorted[i].gf) j++;
+      if (j - i > 1) {
+        const tied = new Set(sorted.slice(i, j).map(s => s.team));
+        const mini = {};
+        tied.forEach(t => { mini[t] = { p: 0, gd: 0, gf: 0 }; });
+        for (const g of playedMatches) {
+          if (!tied.has(g.t1) || !tied.has(g.t2)) continue;
+          mini[g.t1].gf += g.s1; mini[g.t1].gd += g.s1 - g.s2;
+          mini[g.t2].gf += g.s2; mini[g.t2].gd += g.s2 - g.s1;
+          if (g.s1 > g.s2) mini[g.t1].p += 3;
+          else if (g.s2 > g.s1) mini[g.t2].p += 3;
+          else { mini[g.t1].p++; mini[g.t2].p++; }
+        }
+        const sub = sorted.slice(i, j).sort((x, y) =>
+          mini[y.team].p - mini[x.team].p ||
+          mini[y.team].gd - mini[x.team].gd ||
+          mini[y.team].gf - mini[x.team].gf ||
+          y.fp - x.fp ||
+          x.team.localeCompare(y.team));
+        sorted.splice(i, j - i, ...sub);
+      }
+      i = j;
+    }
+  }
 
   // Apply admin override (manual reordering) if present for this group.
   const override = state.standingsOverride[groupLetter];
@@ -3018,13 +3109,18 @@ const appwriteSync = (() => {
     if (doc.score2 !== null && doc.score2 !== undefined) r.score2 = doc.score2;
     if (doc.pen1 !== null && doc.pen1 !== undefined) r.pen1 = doc.pen1;
     if (doc.pen2 !== null && doc.pen2 !== undefined) r.pen2 = doc.pen2;
-    // scorers stored as Array of strings — each element is a JSON-encoded scorer object
+    // scorers stored as Array of strings — each element is a JSON-encoded
+    // scorer object; card entries share the attribute, tagged by a `card` field
     if (Array.isArray(doc.scorers) && doc.scorers.length) {
-      const parsed = [];
+      const scorers = [], cards = [];
       for (const s of doc.scorers) {
-        try { parsed.push(JSON.parse(s)); } catch { /* skip malformed entry */ }
+        try {
+          const obj = JSON.parse(s);
+          (obj && obj.card ? cards : scorers).push(obj);
+        } catch { /* skip malformed entry */ }
       }
-      if (parsed.length) r.scorers = parsed;
+      if (scorers.length) r.scorers = scorers;
+      if (cards.length) r.cards = cards;
     }
     return r;
   }
@@ -3036,10 +3132,12 @@ const appwriteSync = (() => {
       score2: r.score2 ?? null,
       pen1: r.pen1 ?? null,
       pen2: r.pen2 ?? null,
-      // Array attribute: one JSON-encoded scorer per element
-      scorers: (Array.isArray(r.scorers) && r.scorers.length)
-        ? r.scorers.map(s => JSON.stringify(s))
-        : [],
+      // Array attribute: one JSON-encoded scorer per element; card entries
+      // ride along in the same attribute, distinguished by their `card` field
+      scorers: [
+        ...(Array.isArray(r.scorers) ? r.scorers : []).map(s => JSON.stringify(s)),
+        ...(Array.isArray(r.cards) ? r.cards : []).map(c => JSON.stringify(c)),
+      ],
     };
   }
 
@@ -3855,6 +3953,110 @@ if (appwriteSync.available) {
 
 // ===== Live scores (unofficial FIFA API overlay — see live-scores.js) =====
 
+// ── Match Stats modal (data fetched on demand via liveScores.getStats) ──
+
+const CARD_ICONS = { yellow: "🟨", red: "🟥", yellowred: "🟨🟥" };
+
+// [label, FIFA stat key, format] — "passPct" is derived, not a raw key
+const STAT_ROWS = [
+  ["Possession", "Possession", "pct"],
+  ["Expected goals (xG)", "XG", "xg"],
+  ["Shots", "AttemptAtGoal", "int"],
+  ["Shots on target", "AttemptAtGoalOnTarget", "int"],
+  ["Passes", "Passes", "int"],
+  ["Pass accuracy", null, "passPct"],
+  ["Corners", "Corners", "int"],
+  ["Fouls committed", "FoulsAgainst", "int"],
+  ["Offsides", "Offsides", "int"],
+  ["Yellow cards", "YellowCards", "int"],
+  ["Red cards", "RedCards", "int"],
+  ["Saves", "GoalkeeperSaves", "int"],
+];
+
+function statValue(stats, key, kind) {
+  if (kind === "passPct") {
+    const p = stats.Passes, c = stats.PassesCompleted;
+    return (p > 0 && c !== undefined) ? Math.round((c / p) * 100) + "%" : "–";
+  }
+  const v = stats[key];
+  if (v === undefined || v === null) return "–";
+  if (kind === "pct") return Math.round(v * 100) + "%";
+  if (kind === "xg") return v.toFixed(2);
+  return String(Math.round(v));
+}
+
+function showMatchStats(m, t1, t2) {
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog stats-modal" role="dialog" aria-modal="true" aria-labelledby="statsTitle">
+      <div class="modal-icon modal-icon-info">📊</div>
+      <h2 id="statsTitle">Match Stats</h2>
+      <div class="stats-teams">
+        <span class="stats-team">${flagFor(t1)}<span class="stats-team-name">${escapeHTML(t1)}</span></span>
+        <span class="stats-vs">vs</span>
+        <span class="stats-team right">${flagFor(t2)}<span class="stats-team-name">${escapeHTML(t2)}</span></span>
+      </div>
+      <div class="stats-body"><p class="stats-msg">Loading stats…</p></div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-primary" type="button">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector(".modal-btn").addEventListener("click", close);
+  modal.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  const body = modal.querySelector(".stats-body");
+  liveScores.getStats(matchId(m))
+    .catch(() => null)
+    .then((stats) => {
+      if (!modal.isConnected) return; // closed while loading
+      if (!stats) {
+        body.innerHTML = `<p class="stats-msg">Stats are not available for this match.</p>`;
+        return;
+      }
+      // Possession split bar on top, then the comparison rows
+      let bar = "";
+      const p1 = stats.s1.Possession, p2 = stats.s2.Possession;
+      if (p1 >= 0 && p2 >= 0 && p1 + p2 > 0) {
+        const w = Math.round((p1 / (p1 + p2)) * 100);
+        bar = `<div class="stat-bar"><span style="width:${w}%"></span></div>`;
+      }
+      const rows = STAT_ROWS.map(([label, key, kind]) =>
+        `<div class="stat-row">
+          <span class="stat-v">${statValue(stats.s1, key, kind)}</span>
+          <span class="stat-label">${label}</span>
+          <span class="stat-v">${statValue(stats.s2, key, kind)}</span>
+        </div>`
+      ).join("");
+      // Who got booked (from the timeline cards, when we have them) — split
+      // into columns under each team's side, same orientation as the header
+      const cards = getCards(m);
+      const bookingCol = (sideKey) => cards
+        .filter(c => c.team === sideKey)
+        .map(c => `<span class="booking">${CARD_ICONS[c.card] || "🟥"} ${escapeHTML(c.name)}${c.minute ? ` ${escapeHTML(c.minute)}'` : ""}</span>`)
+        .join("");
+      const bookings = cards.length
+        ? `<div class="stats-bookings">
+            <div class="booking-col">${bookingCol(1)}</div>
+            <div class="booking-col right">${bookingCol(2)}</div>
+          </div>`
+        : "";
+      body.innerHTML = bar + rows + bookings;
+    });
+}
+
 // Admin housekeeping: once a match is FINISHED, persist the FIFA API result
 // into the regular store (local + Appwrite). Appwrite then keeps serving the
 // result to every visitor even if the unofficial API breaks later.
@@ -3869,19 +4071,25 @@ function archiveFinishedApiResults() {
     if (!live || live.isLive) continue;     // no API data, or not finished yet
     const existing = state.results[id];
     if (existing) {
-      if ((!Array.isArray(existing.scorers) || existing.scorers.length === 0) &&
-          Array.isArray(live.scorers) && live.scorers.length > 0 &&
-          Number(existing.score1) === Number(live.score1) &&
+      if (Number(existing.score1) === Number(live.score1) &&
           Number(existing.score2) === Number(live.score2)) {
-        state.results[id] = { ...existing, scorers: live.scorers };
-        appwriteSync.scheduleMatch(id);
-        archived++;
+        const fill = {};
+        if ((!Array.isArray(existing.scorers) || existing.scorers.length === 0) &&
+            Array.isArray(live.scorers) && live.scorers.length > 0) fill.scorers = live.scorers;
+        if ((!Array.isArray(existing.cards) || existing.cards.length === 0) &&
+            Array.isArray(live.cards) && live.cards.length > 0) fill.cards = live.cards;
+        if (Object.keys(fill).length) {
+          state.results[id] = { ...existing, ...fill };
+          appwriteSync.scheduleMatch(id);
+          archived++;
+        }
       }
       continue;
     }
     const rec = { score1: live.score1, score2: live.score2 };
     if (live.pen1 !== undefined) { rec.pen1 = live.pen1; rec.pen2 = live.pen2; }
     if (Array.isArray(live.scorers) && live.scorers.length) rec.scorers = live.scorers;
+    if (Array.isArray(live.cards) && live.cards.length) rec.cards = live.cards;
     state.results[id] = rec;
     appwriteSync.scheduleMatch(id);
     archived++;

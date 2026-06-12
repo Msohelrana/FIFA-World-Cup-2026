@@ -24,6 +24,10 @@ const liveScores = (() => {
   const TYPE_OWN_GOAL = 34;
   const PERIOD_SHOOTOUT = 11; // shootout kicks are not goal-scorer entries
 
+  // Card event types: 2 = yellow, 3 = straight red, 4 = second yellow → red.
+  // (Type 71 is a bare "Red card given" notice with no player/team — skipped.)
+  const CARD_TYPES = new Map([[2, "yellow"], [3, "red"], [4, "yellowred"]]);
+
   // FIFA's English team names → names used in fixtures.js
   const TEAM_ALIASES = {
     "Korea Republic": "South Korea",
@@ -39,7 +43,7 @@ const liveScores = (() => {
   const TIMELINE_RECENT_MS = 48 * 36e5;  // fetch scorers for matches < 48h old
   const KICKOFF_TOLERANCE_MS = 90 * 60 * 1000;
 
-  // app matchId → {score1, score2, pen1, pen2, scorers, isLive, matchTime}
+  // app matchId → {score1, score2, pen1, pen2, scorers, cards, isLive, matchTime}
   const overlay = new Map();
 
   // Finished matches' scorers are immutable — cache them across reloads so a
@@ -136,6 +140,25 @@ const liveScores = (() => {
     return out;
   }
 
+  // Timeline card events → [{team: 1|2, name, minute, card: "yellow"|"red"|"yellowred"}]
+  function parseCards(timeline, t1, t2) {
+    const out = [];
+    for (const ev of timeline.Event || []) {
+      const card = CARD_TYPES.get(ev.Type);
+      if (!card) continue;
+      const desc = (Array.isArray(ev.EventDescription) && ev.EventDescription[0])
+        ? ev.EventDescription[0].Description : "";
+      // "SITHOLE (South Africa) is sent off!" → name + team
+      const m = /^(.+?)\s*\(([^)]+)\)/.exec(desc);
+      if (!m) continue;
+      const team = localName(m[2].trim());
+      const side = team === t1 ? 1 : team === t2 ? 2 : 0;
+      if (!side) continue;
+      out.push({ team: side, name: m[1].trim(), minute: (ev.MatchMinute || "").replace(/'/g, ""), card });
+    }
+    return out;
+  }
+
   async function fetchJSON(url) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error("FIFA API HTTP " + res.status);
@@ -226,6 +249,10 @@ const liveScores = (() => {
         score2: flipped ? hs : as_,
         isLive,
         matchTime: (lp && lp.matchTime) || fm.MatchTime || "",
+        // Identifiers for the on-demand match-stats endpoint (fdh-api)
+        statsId: (fm.Properties && fm.Properties.IdIFES) || null,
+        idTeam1: flipped ? (fm.Away && fm.Away.IdTeam) : (fm.Home && fm.Home.IdTeam),
+        idTeam2: flipped ? (fm.Home && fm.Home.IdTeam) : (fm.Away && fm.Away.IdTeam),
       };
       if (isLive) rec.liveLabel = liveChipLabel(lp ? lp.period : undefined, rec.matchTime);
       const hp = fm.HomeTeamPenaltyScore, ap = fm.AwayTeamPenaltyScore;
@@ -234,9 +261,13 @@ const liveScores = (() => {
         rec.pen2 = flipped ? hp : ap;
       }
 
-      // Scorers: cached for finished matches, refreshed every poll while live
-      if (finished && scorerCache[fm.IdMatch]) {
-        rec.scorers = scorerCache[fm.IdMatch];
+      // Timeline data (scorers + cards): cached for finished matches,
+      // refreshed every poll while live. Legacy cache entries (a bare scorers
+      // array, pre-cards) are refetched while recent to pick up cards.
+      const cached = scorerCache[fm.IdMatch];
+      if (finished && cached && !Array.isArray(cached)) {
+        if (cached.scorers && cached.scorers.length) rec.scorers = cached.scorers;
+        if (cached.cards && cached.cards.length) rec.cards = cached.cards;
       } else if (isLive || (finished && now - kickoff < TIMELINE_RECENT_MS)) {
         const rt = resolveMatchTeams(fixture, ko);
         timelineJobs.push({
@@ -244,6 +275,8 @@ const liveScores = (() => {
           t1: rt.team1 || fixture.team1,
           t2: rt.team2 || fixture.team2,
         });
+      } else if (finished && Array.isArray(cached) && cached.length) {
+        rec.scorers = cached; // legacy entry too old to refetch — cards unknown
       }
       overlay.set(matchId(fixture), rec);
     }
@@ -254,9 +287,11 @@ const liveScores = (() => {
           `${API}/timelines/${fm.IdCompetition}/${fm.IdSeason}/${fm.IdStage}/${fm.IdMatch}?language=en`
         );
         const scorers = parseScorers(tl, t1, t2);
+        const cards = parseCards(tl, t1, t2);
         if (scorers.length) rec.scorers = scorers;
+        if (cards.length) rec.cards = cards;
         if (finished) {
-          scorerCache[fm.IdMatch] = scorers;
+          scorerCache[fm.IdMatch] = { scorers, cards };
           cacheDirty = true;
         }
       } catch { /* scorers are optional — the score is already set */ }
@@ -280,6 +315,32 @@ const liveScores = (() => {
     return POLL_IDLE_MS;
   }
 
+  // ── Match stats (fdh-api.fifa.com — same unofficial status as api.fifa.com) ──
+  // Fetched on demand when the user opens the Match Stats modal, never polled.
+  // statsId (IdIFES) → { at, data }; finished-match stats are immutable.
+  const statsCache = new Map();
+  const STATS_LIVE_TTL_MS = 60 * 1000;
+
+  // Returns { s1: {StatName: value}, s2: {...} } oriented to the app's
+  // team1/team2 sides, or null when stats can't be resolved for this match.
+  async function getStats(id) {
+    const rec = overlay.get(id);
+    if (!rec || !rec.statsId || !rec.idTeam1 || !rec.idTeam2) return null;
+    const hit = statsCache.get(rec.statsId);
+    if (hit && (!rec.isLive || Date.now() - hit.at < STATS_LIVE_TTL_MS)) return hit.data;
+    const raw = await fetchJSON(`https://fdh-api.fifa.com/v1/stats/match/${rec.statsId}/teams.json`);
+    const rows1 = raw[rec.idTeam1], rows2 = raw[rec.idTeam2];
+    if (!Array.isArray(rows1) || !Array.isArray(rows2)) return null;
+    const toObj = (rows) => {
+      const o = {};
+      for (const r of rows) o[r[0]] = r[1];
+      return o;
+    };
+    const data = { s1: toObj(rows1), s2: toObj(rows2) };
+    statsCache.set(rec.statsId, { at: Date.now(), data });
+    return data;
+  }
+
   let firstRun = true;
 
   async function tick() {
@@ -301,6 +362,7 @@ const liveScores = (() => {
 
   return {
     get(id) { return overlay.get(id) || null; },
+    getStats,
     start(updateCb) {
       onUpdate = updateCb;
       // Tab was backgrounded (polling paused) → refresh as soon as it returns
