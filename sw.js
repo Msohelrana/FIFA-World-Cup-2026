@@ -6,7 +6,7 @@
 //   - Appwrite realtime (WebSocket): not intercepted; the browser handles it natively
 //   - Anything else same-origin: stale-while-revalidate
 
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const APP_CACHE = `wc2026-app-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `wc2026-runtime-${CACHE_VERSION}`;
 
@@ -18,6 +18,7 @@ const APP_SHELL = [
   "./app.js",
   "./fixtures.js",
   "./third-place-matrix.js",
+  "./live-scores.js",
   "./manifest.webmanifest",
   "./icon.png",
   "./icon.svg",

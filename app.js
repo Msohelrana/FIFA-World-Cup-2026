@@ -354,7 +354,18 @@ function matchId(m) {
 }
 
 function getResult(m) {
-  return state.results[matchId(m)];
+  const id = matchId(m);
+  const manual = state.results[id];
+  const live = (typeof liveScores !== "undefined") ? liveScores.get(id) : null;
+  if (!live) return manual;
+  if (live.isLive) return live;   // in play: the FIFA feed wins
+  if (!manual) return live;       // no admin entry yet: show the API result
+  // Admin entry is canonical after FT; just fill a missing scorers list
+  if ((!Array.isArray(manual.scorers) || manual.scorers.length === 0) &&
+      Array.isArray(live.scorers) && live.scorers.length > 0) {
+    return { ...manual, scorers: live.scorers };
+  }
+  return manual;
 }
 
 // --- Populate dropdowns ---
@@ -500,6 +511,15 @@ function formatCountdown(m, nowMs = Date.now()) {
   return { state: "ended", text: "" };
 }
 
+// Live-API override: the real match minute beats the time-window heuristic.
+function applyLiveChip(mid, cd) {
+  const live = (typeof liveScores !== "undefined" && mid) ? liveScores.get(mid) : null;
+  if (live && live.isLive) {
+    return { state: "live", text: live.matchTime ? `🔴 LIVE ${live.matchTime}` : "🔴 LIVE" };
+  }
+  return cd;
+}
+
 // --- Renderers ---
 function renderMatchCard(m, highlightTeam, ko) {
   const stageLabel = STAGE_LABELS[m.stage] + (m.group ? ` · Group ${m.group}` : "");
@@ -515,7 +535,7 @@ function renderMatchCard(m, highlightTeam, ko) {
   const kickoffUtcMs = fixtureToUTC(m).getTime();
   const localTime = formatTimeInTz(fixtureToUTC(m), state.selectedTz);
   const stageBadge = `<span class="stage-badge ${m.stage}">${stageLabel}</span>`;
-  const cd = formatCountdown(m);
+  const cd = applyLiveChip(matchId(m), formatCountdown(m));
   const countdownChip = cd.state === "ended"
     ? ""
     : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
@@ -578,7 +598,7 @@ function renderMatchCard(m, highlightTeam, ko) {
 
 // --- Scorers ---
 function getScorers(m) {
-  const r = state.results[matchId(m)];
+  const r = getResult(m);
   return (r && Array.isArray(r.scorers)) ? r.scorers : [];
 }
 
@@ -1452,7 +1472,7 @@ function computeTopScorers() {
   // Key by "name|team" so same name on different teams stays separate
   const agg = new Map();
   for (const m of FIXTURES) {
-    const r = state.results[matchId(m)];
+    const r = getResult(m);
     if (!r || !Array.isArray(r.scorers) || r.scorers.length === 0) continue;
     const { team1, team2 } = resolveMatchTeams(m, ko);
     if (!team1 || !team2) continue;        // unresolved KO match — skip
@@ -3531,7 +3551,9 @@ function computeUserLeaderboardRow(user) {
   let pkCount = 0;
   for (const m of FIXTURES) {
     const pick = user.picks[matchId(m)];
-    const result = state.results[matchId(m)];
+    // Manual entry or FIFA API result — in-play scores count too, so
+    // leaderboard points update live as goals go in.
+    const result = getResult(m);
     const s = scoreMatchPick(pick, result, m);
     if (!s) continue;
     total += s.awarded;
@@ -3669,7 +3691,8 @@ function tickCountdowns() {
     const kickoff = +card.dataset.kickoff;
     if (!kickoff) return;
     const stage = card.dataset.stage || "group";
-    const cdFinal = formatCountdownDirect(kickoff, stage, now);
+    const mid = card.querySelector(".result-row")?.dataset.mid;
+    const cdFinal = applyLiveChip(mid, formatCountdownDirect(kickoff, stage, now));
     card.classList.toggle("is-live", cdFinal.state === "live");
     if (cdFinal.state === "ended") {
       const t = card.querySelector(".match-time");
@@ -3781,6 +3804,46 @@ if (appwriteSync.available) {
       applyServerData(payload);
       rerenderActive();
     }
+  });
+}
+
+// ===== Live scores (unofficial FIFA API overlay — see live-scores.js) =====
+
+// Admin housekeeping: once the FIFA API has the final result of a match and
+// the manual entry agrees with it (same score + pens), the manual copy is
+// redundant — drop it locally and from Appwrite so the API overlay serves it.
+// Entries that DISAGREE with the API are kept: those are deliberate
+// corrections and must keep shadowing the feed.
+function pruneRedundantManualEntries() {
+  if (!state.isAdmin || typeof liveScores === "undefined") return 0;
+  let removed = 0;
+  for (const id of Object.keys(state.results)) {
+    const live = liveScores.get(id);
+    if (!live || live.isLive) continue;
+    const manual = state.results[id];
+    if (Number(manual.score1) !== Number(live.score1) ||
+        Number(manual.score2) !== Number(live.score2)) continue;
+    if ((manual.pen1 ?? null) !== (live.pen1 ?? null) ||
+        (manual.pen2 ?? null) !== (live.pen2 ?? null)) continue;
+    delete state.results[id];
+    appwriteSync.scheduleMatch(id);
+    removed++;
+  }
+  if (removed) {
+    saveResults();
+    console.log(`Live scores: pruned ${removed} manual entr${removed === 1 ? "y" : "ies"} now covered by the FIFA API.`);
+  }
+  return removed;
+}
+
+if (typeof liveScores !== "undefined") {
+  liveScores.start((changed) => {
+    const pruned = pruneRedundantManualEntries();
+    if (!changed && !pruned) return;
+    // Don't rebuild the DOM under the admin's cursor mid-entry
+    const ae = document.activeElement;
+    if (ae && ae.closest && ae.closest(".result-row, .scorer-form")) return;
+    rerenderActive();
   });
 }
 
