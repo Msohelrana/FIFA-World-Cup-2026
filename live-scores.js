@@ -142,6 +142,33 @@ const liveScores = (() => {
     return res.json();
   }
 
+  // Returns { kickoff, finished, isLive } for a calendar match.
+  // Treat "started and not finished" as live even if the status code is
+  // unexpected — losing the live flag is worse than a false positive.
+  function liveness(fm, now) {
+    const kickoff = Date.parse(fm.Date);
+    const finished = fm.MatchStatus === STATUS_FINISHED;
+    const isLive = !finished &&
+      (fm.MatchStatus === STATUS_LIVE ||
+        (now >= kickoff && now - kickoff < 3.75 * 36e5));
+    return { kickoff, finished, isLive };
+  }
+
+  // Period codes used by the live endpoint (community-documented):
+  // 3 = 1st half, 4 = half-time, 5 = 2nd half,
+  // 6 = ET 1st half, 7 = ET break, 8 = ET 2nd half, 9 = penalty shootout.
+  // Unknown/missing codes fall back to the plain minute display.
+  function liveChipLabel(period, matchTime) {
+    switch (period) {
+      case 4: return "HT";
+      case 7: return "ET break";
+      case 9: return "Pens";
+      case 6:
+      case 8: return matchTime ? `ET ${matchTime}` : "ET";
+      default: return matchTime ? `LIVE ${matchTime}` : "LIVE";
+    }
+  }
+
   // One poll: full tournament calendar (one request, all 104 matches), then
   // timelines only for live matches + recently-finished ones not yet cached.
   async function poll() {
@@ -154,17 +181,29 @@ const liveScores = (() => {
     let anyLive = false;
     let nextKickoff = Infinity;
     let cacheDirty = false;
+
+    // While something is in play, one extra request to the live endpoint
+    // gives the match phase (HT/ET/pens) and the freshest score/clock.
+    const phaseByMatch = new Map();
+    if (matches.some((fm) => liveness(fm, now).isLive)) {
+      try {
+        const ld = await fetchJSON(`${API}/live/football/now?language=en`);
+        for (const lm of ld.Results || []) {
+          phaseByMatch.set(lm.IdMatch, {
+            period: lm.Period,
+            matchTime: lm.MatchTime || "",
+            hs: lm.HomeTeam ? lm.HomeTeam.Score : (lm.Home && lm.Home.Score),
+            as: lm.AwayTeam ? lm.AwayTeam.Score : (lm.Away && lm.Away.Score),
+          });
+        }
+      } catch { /* phase labels are optional — minute fallback still works */ }
+    }
+
     overlay.clear();
     const timelineJobs = [];
 
     for (const fm of matches) {
-      const kickoff = Date.parse(fm.Date);
-      const finished = fm.MatchStatus === STATUS_FINISHED;
-      // Treat "started and not finished" as live even if the status code is
-      // unexpected — losing the live flag is worse than a false positive.
-      const isLive = !finished &&
-        (fm.MatchStatus === STATUS_LIVE ||
-          (now >= kickoff && now - kickoff < 3.75 * 36e5));
+      const { kickoff, finished, isLive } = liveness(fm, now);
       if (!finished && !isLive) {
         if (kickoff > now) nextKickoff = Math.min(nextKickoff, kickoff);
         continue;
@@ -175,16 +214,20 @@ const liveScores = (() => {
       if (!hit) continue;
       const { fixture, flipped } = hit;
 
-      const hs = fm.HomeTeamScore ?? (fm.Home && fm.Home.Score);
-      const as_ = fm.AwayTeamScore ?? (fm.Away && fm.Away.Score);
+      const lp = isLive ? phaseByMatch.get(fm.IdMatch) : null;
+      let hs = fm.HomeTeamScore ?? (fm.Home && fm.Home.Score);
+      let as_ = fm.AwayTeamScore ?? (fm.Away && fm.Away.Score);
+      if (lp && lp.hs !== null && lp.hs !== undefined) hs = lp.hs;
+      if (lp && lp.as !== null && lp.as !== undefined) as_ = lp.as;
       if (hs === null || hs === undefined || as_ === null || as_ === undefined) continue;
 
       const rec = {
         score1: flipped ? as_ : hs,
         score2: flipped ? hs : as_,
         isLive,
-        matchTime: fm.MatchTime || "",
+        matchTime: (lp && lp.matchTime) || fm.MatchTime || "",
       };
+      if (isLive) rec.liveLabel = liveChipLabel(lp ? lp.period : undefined, rec.matchTime);
       const hp = fm.HomeTeamPenaltyScore, ap = fm.AwayTeamPenaltyScore;
       if (hp !== null && hp !== undefined && ap !== null && ap !== undefined && (hp || ap)) {
         rec.pen1 = flipped ? ap : hp;

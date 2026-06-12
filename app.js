@@ -519,7 +519,8 @@ function formatCountdown(m, nowMs = Date.now()) {
 function applyLiveChip(mid, cd) {
   const live = (typeof liveScores !== "undefined" && mid) ? liveScores.get(mid) : null;
   if (live && live.isLive) {
-    return { state: "live", text: live.matchTime ? `🔴 LIVE ${live.matchTime}` : "🔴 LIVE" };
+    const label = live.liveLabel || (live.matchTime ? `LIVE ${live.matchTime}` : "LIVE");
+    return { state: "live", text: `🔴 ${label}` };
   }
   return cd;
 }
@@ -1580,14 +1581,21 @@ function renderPicks() {
   });
   header.querySelector("#picksRulesBtn").addEventListener("click", openRulesModal);
   header.querySelector("#picksResetBtn").addEventListener("click", async () => {
-    const ok = await showConfirm("Clear every score prediction in this device?", {
+    const ok = await showConfirm("Clear your predictions for upcoming matches? Picks for matches that already kicked off are locked and will be kept.", {
       title: "Reset picks",
       icon: "♻",
       confirmLabel: "Reset",
       danger: true,
     });
     if (!ok) return;
-    state.matchPicks = {};
+    // Keep locked picks: they already count on the leaderboard and can't be
+    // re-entered once a match has kicked off.
+    const kept = {};
+    for (const m of FIXTURES) {
+      const id = matchId(m);
+      if (state.matchPicks[id] && isMatchLocked(m)) kept[id] = state.matchPicks[id];
+    }
+    state.matchPicks = kept;
     saveMatchPicks();
     if (state.currentUser) userPicksSync.saveOwn();
     renderPicks();
@@ -1859,6 +1867,9 @@ function renderPicksLeaderboard() {
   const tbody = rows.slice(0, 20).map(r => {
     const medal = r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : "";
     const isMe = myId === r.userId;
+    const bonusCell = state.isAdmin
+      ? `<td class="lb-bonus"><input type="number" min="0" max="99" class="score-input lb-bonus-input" data-uid="${escapeHTML(r.userId)}" value="${r.bonus || ""}" placeholder="–" aria-label="Bonus points for ${escapeHTML(r.userName)}"></td>`
+      : `<td class="lb-bonus">${r.bonus ? "+" + r.bonus : "–"}</td>`;
     return `
       <tr class="${isMe ? "is-me" : ""} ${r.rank <= 3 ? "lb-top" : ""}">
         <td class="lb-rank">${medal} ${r.rank}</td>
@@ -1867,6 +1878,7 @@ function renderPicksLeaderboard() {
         <td class="lb-exact">${r.exactCount}</td>
         <td class="lb-outcome">${r.outcomeCount}</td>
         <td class="lb-pk">${r.pkCount}</td>
+        ${bonusCell}
       </tr>`;
   }).join("");
   wrap.innerHTML = `
@@ -1881,12 +1893,20 @@ function renderPicksLeaderboard() {
             <th class="lb-exact" title="Exact-score predictions">Exact</th>
             <th class="lb-outcome" title="Correct outcomes (winner / draw)">Outcome</th>
             <th class="lb-pk" title="Correct penalty winners">PK</th>
+            <th class="lb-bonus" title="Admin-awarded bonus points">Bonus</th>
           </tr>
         </thead>
         <tbody>${tbody}</tbody>
       </table>
     </div>
   `;
+  // Admin: saving a bonus re-sorts the board, so re-render on change (blur/Enter)
+  wrap.querySelectorAll(".lb-bonus-input").forEach(inp => {
+    inp.addEventListener("change", () => {
+      setUserBonus(inp.dataset.uid, inp.value);
+      renderPicks();
+    });
+  });
   return wrap;
 }
 
@@ -3548,6 +3568,26 @@ function scoreMatchPick(pick, result, m) {
   return { exact, outcome, diff, pkBonus, basePoints, awarded };
 }
 
+// --- Admin bonus points ---
+// Stored as pseudo-entries in the results store under "bonus:<userId>" with
+// the points in score1 — they ride the existing Appwrite sync (push, realtime,
+// bootstrap) and the admin's write permission without any new collection.
+const BONUS_KEY_PREFIX = "bonus:";
+
+function getUserBonus(userId) {
+  const r = state.results[BONUS_KEY_PREFIX + userId];
+  return r ? (Number(r.score1) || 0) : 0;
+}
+
+function setUserBonus(userId, points) {
+  const id = BONUS_KEY_PREFIX + userId;
+  const n = Math.max(0, Math.min(99, parseInt(points, 10) || 0));
+  if (n === 0) delete state.results[id];
+  else state.results[id] = { score1: n };
+  saveResults();
+  appwriteSync.scheduleMatch(id);
+}
+
 function computeUserLeaderboardRow(user) {
   let total = 0;
   let exactCount = 0;
@@ -3565,10 +3605,12 @@ function computeUserLeaderboardRow(user) {
     if (s.outcome) outcomeCount++;
     if (s.pkBonus > 0) pkCount++;
   }
+  const bonus = getUserBonus(user.userId);
   return {
     userId: user.userId,
     userName: user.userName,
-    total,
+    total: total + bonus,
+    bonus,
     exactCount,
     outcomeCount,
     pkCount,
