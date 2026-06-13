@@ -499,6 +499,20 @@ html:has(body.modal-open) { overflow: hidden; overscroll-behavior: none; }
   color: var(--accent-2);
   border: 1px solid rgba(76, 201, 240, 0.3);
 }
+.match-countdown.soon {
+  background: rgba(255, 80, 60, 0.18);
+  color: #ff7060;
+  border: 1px solid rgba(255, 80, 60, 0.55);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 8px rgba(255, 80, 60, 0.5);
+  animation: soonPulse 1.6s ease-in-out infinite;
+}
+@keyframes soonPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 80, 60, 0.45); }
+  50%       { box-shadow: 0 0 0 5px rgba(255, 80, 60, 0); }
+}
 .match-countdown.live {
   background: rgba(255, 77, 109, 0.18);
   color: #ffcdd5;
@@ -1585,10 +1599,26 @@ footer {
   background: rgba(76, 201, 240, 0.10);
   border-color: rgba(76, 201, 240, 0.3);
 }
+.pick-card.is-ended .pick-lock-badge {
+  color: #ff6b7a;
+  background: rgba(255, 77, 109, 0.15);
+  border-color: rgba(255, 77, 109, 0.45);
+}
 .pick-card .result-row .score-input:disabled {
   cursor: not-allowed;
   background: rgba(11, 16, 32, 0.4);
   color: var(--text-dim);
+}
+.pick-card.is-ended .pick-row {
+  background: rgba(255, 50, 70, 0.07);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 77, 109, 0.3);
+  padding: 6px 10px;
+}
+.pick-card.is-ended .pick-row .score-input:disabled {
+  background: rgba(255, 50, 70, 0.1);
+  color: #ff8090;
+  border-color: rgba(255, 77, 109, 0.35);
 }
 /* Result label color cues — gold for a clear winner, cyan for a draw */
 .pick-card .result-label.is-draw { color: var(--accent-2); }

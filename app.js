@@ -530,6 +530,14 @@ function formatCountdown(m, nowMs = Date.now()) {
   const diff = utcMs - nowMs;
 
   if (diff > 0) {
+    if (diff <= 24 * 60 * 60 * 1000) {
+      const totalSec = Math.floor(diff / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const pad = n => String(n).padStart(2, "0");
+      return { state: "soon", text: `⏰ ${pad(h)}:${pad(m)}:${pad(s)}` };
+    }
     const totalMin = Math.floor(diff / 60000);
     const days = Math.floor(totalMin / 1440);
     const hours = Math.floor((totalMin % 1440) / 60);
@@ -1806,6 +1814,7 @@ function renderPickCard(m, ko) {
   const timeText = cd.state === "ended" ? `<span class="match-time-ft">FT</span> <span class="match-time-scheduled">${localTime}</span>` : localTime;
   const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${timeText}</span>${countdownChip}</div>`;
   if (cd.state === "live") card.classList.add("is-live");
+  if (cd.state === "ended") card.classList.add("is-ended");
   card.dataset.kickoff = String(kickoffUtcMs);
   card.dataset.stage = m.stage;
 
@@ -4078,10 +4087,12 @@ function tickCountdowns() {
     chip.textContent = cdFinal.text;
     chip.className = `match-countdown ${cdFinal.state}`;
   });
-  // If user is on the Predict tab, re-render so newly-kicked-off matches/groups lock
-  if (state.view === "predict") renderPredict();
-  // Same for Picks — newly-kicked-off matches need their inputs disabled
-  if (state.view === "picks") renderPicks();
+  // Re-render Predict/Picks every 30s so newly-kicked-off matches lock inputs
+  _tickN++;
+  if (_tickN % 30 === 0) {
+    if (state.view === "predict") renderPredict();
+    if (state.view === "picks") renderPicks();
+  }
 }
 
 // Same shape as formatCountdown but called with already-known kickoff ms + stage —
@@ -4090,6 +4101,14 @@ function formatCountdownDirect(kickoffMs, stage, nowMs) {
   const liveWindow = (stage && stage !== "group") ? LIVE_DURATION_KO_MS : LIVE_DURATION_GROUP_MS;
   const diff = kickoffMs - nowMs;
   if (diff > 0) {
+    if (diff <= 24 * 60 * 60 * 1000) {
+      const totalSec = Math.floor(diff / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const pad = n => String(n).padStart(2, "0");
+      return { state: "soon", text: `⏰ ${pad(h)}:${pad(m)}:${pad(s)}` };
+    }
     const totalMin = Math.floor(diff / 60000);
     const days = Math.floor(totalMin / 1440);
     const hours = Math.floor((totalMin % 1440) / 60);
@@ -4107,7 +4126,8 @@ function formatCountdownDirect(kickoffMs, stage, nowMs) {
   }
   return { state: "ended", text: "" };
 }
-setInterval(tickCountdowns, 30 * 1000);
+let _tickN = 0;
+setInterval(tickCountdowns, 1000);
 
 // Bootstrap from Appwrite (preferred) or fall back to results.json.
 // Smart strategy: do a lightweight version check first (2 tiny queries).
