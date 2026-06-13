@@ -3055,6 +3055,7 @@ function renderSummary(team, date) {
 // --- View switching ---
 function switchView(view) {
   state.view = view;
+  try { localStorage.setItem("wc26_lastView", view); } catch { /* quota */ }
   els.tabs.forEach(t => {
     const active = t.dataset.view === view;
     t.classList.toggle("active", active);
@@ -3987,7 +3988,13 @@ updateUserBtn();
 populateTeams();
 populateTimezones();
 populateDates();
-render();
+const VALID_VIEWS = ["schedule", "groups", "standings", "bracket", "scorers", "predict", "picks"];
+const savedView = localStorage.getItem("wc26_lastView");
+if (savedView && VALID_VIEWS.includes(savedView) && savedView !== "schedule") {
+  switchView(savedView);
+} else {
+  render();
+}
 
 // Restore Appwrite auth session (if any) + bootstrap leaderboard data
 if (appwriteAuth.available) {
