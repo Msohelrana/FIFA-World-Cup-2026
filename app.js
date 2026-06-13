@@ -3318,7 +3318,7 @@ async function afterLogin() {
 }
 
 // ===== Appwrite real-time sync =====
-const VAPID_PUBLIC_KEY = "BNCZN61m1AjILWk3saQsYqHk2rGPPzOJ_jU9a3mJAJGF1xUsRwxZlib-AL81YDyd-MNERUvm3LBhZXOuek8XaUk";
+const VAPID_PUBLIC_KEY = "BPUwFJ5Yf2hKd2Pi_V5B17W4BAWOSDkZyw9RAkwjfPNS5fDCVgq4sX56hPopTfi1AdzntWMaVCyfUtNLIOWpfno";
 
 const APPWRITE_CONFIG = {
   endpoint: "https://sgp.cloud.appwrite.io/v1",
