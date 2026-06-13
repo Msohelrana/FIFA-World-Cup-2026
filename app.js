@@ -3158,6 +3158,35 @@ els.tabs.forEach(t => {
   t.addEventListener("click", () => switchView(t.dataset.view));
 });
 
+// Mobile swipe navigation between tabs
+(function () {
+  const SWIPE_VIEWS = ["schedule", "groups", "standings", "bracket", "scorers", "predict", "picks"];
+  const main = document.querySelector("main.container");
+  let _sx = 0, _sy = 0;
+
+  main.addEventListener("touchstart", e => {
+    _sx = e.touches[0].clientX;
+    _sy = e.touches[0].clientY;
+  }, { passive: true });
+
+  main.addEventListener("touchend", e => {
+    const dx = e.changedTouches[0].clientX - _sx;
+    const dy = e.changedTouches[0].clientY - _sy;
+    // Ignore if swipe distance is too short or vertical scroll dominates
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
+    const idx = SWIPE_VIEWS.indexOf(state.view);
+    if (idx === -1) return;
+    const next = dx < 0 ? idx + 1 : idx - 1;
+    if (next < 0 || next >= SWIPE_VIEWS.length) return;
+    const dir = dx < 0 ? "swipe-from-right" : "swipe-from-left";
+    switchView(SWIPE_VIEWS[next]);
+    main.classList.remove("swipe-from-left", "swipe-from-right");
+    void main.offsetWidth; // force reflow so animation restarts
+    main.classList.add(dir);
+    setTimeout(() => main.classList.remove("swipe-from-left", "swipe-from-right"), 250);
+  }, { passive: true });
+})();
+
 // ===== User auth UI =====
 function updateUserBtn() {
   if (!els.userBtn) return;

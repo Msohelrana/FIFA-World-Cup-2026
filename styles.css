@@ -404,6 +404,22 @@ html:has(body.modal-open) { overflow: hidden; overscroll-behavior: none; }
   color: white;
 }
 
+/* Mobile swipe tab navigation */
+@keyframes swipeFromRight {
+  from { opacity: 0.4; transform: translateX(36px); }
+  to   { opacity: 1;   transform: translateX(0); }
+}
+@keyframes swipeFromLeft {
+  from { opacity: 0.4; transform: translateX(-36px); }
+  to   { opacity: 1;   transform: translateX(0); }
+}
+.container.swipe-from-right > section:not([hidden]) {
+  animation: swipeFromRight 0.22s ease-out forwards;
+}
+.container.swipe-from-left > section:not([hidden]) {
+  animation: swipeFromLeft 0.22s ease-out forwards;
+}
+
 /* ---------- Summary ---------- */
 .summary {
   margin-top: 18px;
