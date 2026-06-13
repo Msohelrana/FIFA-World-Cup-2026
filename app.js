@@ -559,7 +559,7 @@ function renderMatchCard(m, highlightTeam, ko) {
   const countdownChip = cd.state === "ended"
     ? ""
     : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
-  const timeText = cd.state === "ended" ? "FT" : localTime;
+  const timeText = cd.state === "ended" ? `<span class="match-time-ft">FT</span> <span class="match-time-scheduled">${localTime}</span>` : localTime;
   const editing = isCardEditing(matchId(m));
   const editBtn = state.isAdmin
     ? `<button type="button" class="card-edit-btn${editing ? " is-editing" : ""}" title="${editing ? "Finish editing this result" : "Edit this result"}">${editing ? "✓ Done" : "✏ Edit"}</button>`
@@ -985,17 +985,46 @@ function renderSchedule(filterTeam, filterDate) {
     els.scheduleView.appendChild(banner);
   }
 
+  // Collect live matches first (shown pinned at top, ignoring date filter)
+  const liveMatches = FIXTURES.filter(m => {
+    if (!matchInvolves(m, filterTeam, ko)) return false;
+    return applyLiveChip(matchId(m), formatCountdown(m)).state === "live";
+  });
+  const liveIds = new Set(liveMatches.map(m => matchId(m)));
+
+  if (liveMatches.length > 0) {
+    const liveGroup = document.createElement("div");
+    liveGroup.className = "day-group live-now-group";
+
+    const liveHeader = document.createElement("div");
+    liveHeader.className = "day-header live-now-header";
+    liveHeader.innerHTML = `
+      <span class="day-date live-now-label">🔴 Live Now</span>
+      <span class="day-count">${liveMatches.length} ${liveMatches.length === 1 ? "match" : "matches"}</span>
+    `;
+    liveGroup.appendChild(liveHeader);
+
+    const liveList = document.createElement("div");
+    liveList.className = "match-list";
+    for (const m of liveMatches) {
+      liveList.appendChild(renderMatchCard(m, filterTeam, ko));
+    }
+    liveGroup.appendChild(liveList);
+    els.scheduleView.appendChild(liveGroup);
+  }
+
   // Bucket by date-key in selected timezone
   const byDate = new Map();
   for (const m of FIXTURES) {
     if (!matchInvolves(m, filterTeam, ko)) continue;
+    if (liveIds.has(matchId(m))) continue; // already shown in Live Now section
     const key = dateKeyInTz(fixtureToUTC(m), tz);
     if (filterDate && key !== filterDate) continue;
     if (!byDate.has(key)) byDate.set(key, []);
     byDate.get(key).push(m);
   }
 
-  if (byDate.size === 0) {
+  if (byDate.size === 0 && liveMatches.length === 0) {
     els.scheduleView.innerHTML = `<div class="empty">No matches found for the selected filters.</div>`;
     return;
   }
@@ -1746,7 +1775,7 @@ function renderPickCard(m, ko) {
     ? ""
     : `<span class="match-countdown ${cd.state}">${cd.text}</span>`;
   const stageBadge = `<span class="stage-badge ${m.stage}">${stageLabel}</span>`;
-  const timeText = cd.state === "ended" ? "FT" : localTime;
+  const timeText = cd.state === "ended" ? `<span class="match-time-ft">FT</span> <span class="match-time-scheduled">${localTime}</span>` : localTime;
   const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${timeText}</span>${countdownChip}</div>`;
   if (cd.state === "live") card.classList.add("is-live");
   card.dataset.kickoff = String(kickoffUtcMs);
@@ -1943,6 +1972,148 @@ function openRulesModal() {
   setTimeout(() => modal.querySelector("#rulesCloseBtn").focus(), 60);
 }
 
+function openUserPredictionsModal(userId, userName) {
+  const existing = document.getElementById("userPredModal");
+  if (existing) existing.remove();
+
+  const userEntry = state.leaderboardUsers.find(u => u.userId === userId);
+  const picks = userEntry ? userEntry.picks : {};
+  const ko = getKnockoutAssignments();
+
+  const STAGE_LABELS_PRED = { group: "Group Stage", r32: "Round of 32", r16: "Round of 16", qf: "Quarter-finals", sf: "Semi-finals", third: "Third-Place Match", final: "Final" };
+  const stageOrder = ["group", "r32", "r16", "qf", "sf", "third", "final"];
+
+  let totalPts = 0;
+  let exactCount = 0;
+  let outcomeCount = 0;
+  let missedCount = 0;
+
+  const byStage = {};
+  for (const m of FIXTURES) {
+    if (!byStage[m.stage]) byStage[m.stage] = [];
+    byStage[m.stage].push(m);
+  }
+
+  let tableHTML = "";
+  for (const stage of stageOrder) {
+    const matches = byStage[stage];
+    if (!matches || matches.length === 0) continue;
+    tableHTML += `<tr class="upred-stage-row"><td colspan="4">${STAGE_LABELS_PRED[stage] || stage}</td></tr>`;
+    for (const m of matches) {
+      const id = matchId(m);
+      const pick = picks[id];
+      const result = getResult(m);
+      const hasPick = pick && pick.score1 !== undefined && pick.score2 !== undefined;
+      const hasResult = result && result.score1 !== undefined && result.score2 !== undefined;
+
+      const { team1: t1, team2: t2 } = resolveMatchTeams(m, ko);
+      const displayT1 = t1 || m.team1;
+      const displayT2 = t2 || m.team2;
+
+      let predCell, resultCell, ptsCell, rowClass = "";
+
+      if (hasPick) {
+        let predStr = `${pick.score1}–${pick.score2}`;
+        if (pick.pkWinner) predStr += ` (PK: ${pick.pkWinner === 1 ? escapeHTML(displayT1) : escapeHTML(displayT2)})`;
+        predCell = `<span class="upred-pick-val">${escapeHTML(predStr)}</span>`;
+      } else {
+        predCell = `<span class="upred-no-pick">No pick</span>`;
+      }
+
+      if (hasResult) {
+        let resStr = `${result.score1}–${result.score2}`;
+        if (result.pen1 !== undefined && result.pen2 !== undefined && result.pen1 !== result.pen2) {
+          resStr += ` (PK: ${result.pen1}–${result.pen2})`;
+        }
+        resultCell = `<span class="upred-result-val">${escapeHTML(resStr)}</span>`;
+
+        if (hasPick) {
+          const s = scoreMatchPick(pick, result, m);
+          if (s && s.awarded > 0) {
+            totalPts += s.awarded;
+            if (s.exact) { exactCount++; rowClass = "upred-row-exact"; }
+            else if (s.outcome) { outcomeCount++; rowClass = "upred-row-outcome"; }
+            else rowClass = "upred-row-partial";
+            ptsCell = `<span class="upred-pts-val upred-pts-scored">${s.awarded}</span>`;
+          } else {
+            if (s) totalPts += s.awarded;
+            rowClass = "upred-row-wrong";
+            ptsCell = `<span class="upred-pts-val upred-pts-zero">0</span>`;
+          }
+        } else {
+          // No pick on a finished match = 0 points by default
+          missedCount++;
+          rowClass = "upred-row-missed";
+          ptsCell = `<span class="upred-pts-val upred-pts-missed">0</span>`;
+        }
+      } else {
+        resultCell = `<span class="upred-pending">–</span>`;
+        ptsCell = `<span class="upred-pending">–</span>`;
+        if (!hasPick) missedCount++;
+      }
+
+      tableHTML += `
+        <tr class="upred-row ${rowClass}">
+          <td class="upred-td-match">${escapeHTML(displayT1)} <span class="upred-vs">vs</span> ${escapeHTML(displayT2)}</td>
+          <td class="upred-td-pick">${predCell}</td>
+          <td class="upred-td-result">${resultCell}</td>
+          <td class="upred-td-pts">${ptsCell}</td>
+        </tr>`;
+    }
+  }
+
+  const bonus = getUserBonus(userId);
+  totalPts += bonus;
+
+  const modal = document.createElement("div");
+  modal.id = "userPredModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog upred-modal" role="dialog" aria-modal="true" aria-labelledby="upredTitle">
+      <div class="upred-header">
+        <h2 id="upredTitle">${escapeHTML(userName)}'s Predictions</h2>
+        <div class="upred-stats-row">
+          <span class="upred-stat upred-stat-pts">${totalPts} pts</span>
+          <span class="upred-stat">${exactCount} exact</span>
+          <span class="upred-stat">${outcomeCount} outcome</span>
+          <span class="upred-stat upred-stat-missed">${missedCount} missed</span>
+        </div>
+      </div>
+      <div class="upred-table-wrap">
+        <table class="upred-table">
+          <thead>
+            <tr>
+              <th class="upred-th-match">Match</th>
+              <th class="upred-th-pick">Prediction</th>
+              <th class="upred-th-result">Result</th>
+              <th class="upred-th-pts">Pts</th>
+            </tr>
+          </thead>
+          <tbody>${tableHTML}</tbody>
+        </table>
+      </div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-primary" id="upredCloseBtn" type="button">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector("#upredCloseBtn").addEventListener("click", close);
+  modal.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  setTimeout(() => modal.querySelector("#upredCloseBtn").focus(), 60);
+}
+
 function renderPicksLeaderboard() {
   const wrap = document.createElement("section");
   wrap.className = "picks-leaderboard-section";
@@ -1961,10 +2132,13 @@ function renderPicksLeaderboard() {
     const bonusCell = state.isAdmin
       ? `<td class="lb-bonus"><input type="number" min="0" max="99" class="score-input lb-bonus-input" data-uid="${escapeHTML(r.userId)}" value="${r.bonus || ""}" placeholder="–" aria-label="Bonus points for ${escapeHTML(r.userName)}"></td>`
       : `<td class="lb-bonus">${r.bonus ? "+" + r.bonus : "–"}</td>`;
+    const viewBtn = state.isAdmin
+      ? `<button class="lb-view-btn" data-uid="${escapeHTML(r.userId)}" data-name="${escapeHTML(r.userName)}" title="View ${escapeHTML(r.userName)}'s predictions" aria-label="View ${escapeHTML(r.userName)}'s predictions">👁</button>`
+      : "";
     return `
       <tr class="${isMe ? "is-me" : ""} ${r.rank <= 3 ? "lb-top" : ""}">
         <td class="lb-rank">${medal} ${r.rank}</td>
-        <td class="lb-name">${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</td>
+        <td class="lb-name">${viewBtn}${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</td>
         <td class="lb-total">${r.total}</td>
         <td class="lb-exact">${r.exactCount}</td>
         <td class="lb-outcome">${r.outcomeCount}</td>
@@ -1997,6 +2171,10 @@ function renderPicksLeaderboard() {
       setUserBonus(inp.dataset.uid, inp.value);
       renderPicks();
     });
+  });
+  // Admin: view user predictions modal
+  wrap.querySelectorAll(".lb-view-btn").forEach(btn => {
+    btn.addEventListener("click", () => openUserPredictionsModal(btn.dataset.uid, btn.dataset.name));
   });
   return wrap;
 }

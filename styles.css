@@ -1999,3 +1999,152 @@ footer {
   .predict-third-chip { padding: 9px 10px; font-size: 12.5px; }
   .predict-third-group { font-size: 9px; padding: 2px 5px; letter-spacing: 0.04em; }
 }
+
+/* ---------- Admin: view user predictions button ---------- */
+.lb-view-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  padding: 0;
+  background: rgba(76, 201, 240, 0.12);
+  border: 1px solid rgba(76, 201, 240, 0.25);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--accent-2);
+  vertical-align: middle;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lb-view-btn:hover { background: rgba(76, 201, 240, 0.22); border-color: var(--accent-2); }
+
+/* ---------- User predictions modal ---------- */
+.upred-modal {
+  max-width: 680px;
+  text-align: left;
+  padding: 22px 22px 16px;
+}
+.upred-header { margin-bottom: 14px; }
+.upred-header h2 { margin: 0 0 8px; font-size: 18px; font-weight: 700; }
+.upred-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.upred-stat {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.upred-stat-pts { color: var(--gold); border-color: rgba(255, 209, 102, 0.3); background: rgba(255, 209, 102, 0.08); }
+.upred-stat-missed { color: var(--accent); border-color: rgba(255, 77, 109, 0.3); background: rgba(255, 77, 109, 0.08); }
+.upred-table-wrap {
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.upred-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.upred-table th, .upred-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid rgba(40, 49, 90, 0.5);
+  text-align: center;
+}
+.upred-table th {
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.upred-table tr:last-child td { border-bottom: none; }
+.upred-th-match, .upred-td-match { text-align: left; }
+.upred-td-match { font-weight: 500; }
+.upred-vs { color: var(--text-dim); font-size: 11px; margin: 0 3px; }
+.upred-stage-row td {
+  background: rgba(76, 201, 240, 0.07);
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(76, 201, 240, 0.15);
+}
+.upred-pick-val { color: var(--text); font-weight: 600; }
+.upred-no-pick { color: var(--text-dim); font-style: italic; font-size: 11px; }
+.upred-result-val { color: var(--text); }
+.upred-pending { color: var(--text-dim); }
+.upred-pts-val { font-weight: 700; font-size: 13px; }
+.upred-pts-scored { color: var(--green); }
+.upred-pts-zero { color: var(--text-dim); }
+.upred-pts-missed { color: var(--accent); }
+.upred-row-exact td { background: rgba(46, 204, 113, 0.06); }
+.upred-row-outcome td { background: rgba(76, 201, 240, 0.05); }
+.upred-row-missed td { background: rgba(255, 77, 109, 0.05); }
+.upred-row-wrong td { background: transparent; }
+
+@media (max-width: 600px) {
+  .upred-modal { padding: 16px 12px 12px; }
+  .upred-table { font-size: 11.5px; }
+  .upred-table th, .upred-table td { padding: 6px 5px; }
+}
+
+/* ---------- Live Now pinned section ---------- */
+.live-now-group {
+  border: 1px solid rgba(255, 60, 60, 0.35);
+  border-radius: 10px;
+  overflow: hidden;
+  animation: live-pulse-border 2s ease-in-out infinite;
+}
+@keyframes live-pulse-border {
+  0%, 100% { border-color: rgba(255, 60, 60, 0.35); }
+  50%       { border-color: rgba(255, 60, 60, 0.65); }
+}
+.live-now-header {
+  background: rgba(255, 40, 40, 0.12) !important;
+  border-bottom: 1px solid rgba(255, 60, 60, 0.25);
+}
+.live-now-label {
+  color: #ff4d6d !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.03em;
+}
+
+/* ---------- FT badge + scheduled time ---------- */
+.match-time-ft {
+  display: inline-block;
+  background: rgba(255, 77, 109, 0.15);
+  color: #ff4d6d;
+  border: 1px solid rgba(255, 77, 109, 0.35);
+  border-radius: 5px;
+  padding: 1px 6px;
+  font-size: 0.82em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  vertical-align: middle;
+}
+.match-time-scheduled {
+  font-size: 0.8em;
+  opacity: 0.55;
+  font-weight: 400;
+  margin-left: 3px;
+  vertical-align: middle;
+}
