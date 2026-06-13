@@ -38,7 +38,7 @@ const liveScores = (() => {
     "Congo DR": "DR Congo",
   };
 
-  const POLL_LIVE_MS = 60 * 1000;        // something is in play
+  const POLL_LIVE_MS = 30 * 1000;        // something is in play
   const POLL_IDLE_MS = 10 * 60 * 1000;   // nothing live right now
   const TIMELINE_RECENT_MS = 48 * 36e5;  // fetch scorers for matches < 48h old
   const KICKOFF_TOLERANCE_MS = 90 * 60 * 1000;
@@ -57,7 +57,7 @@ const liveScores = (() => {
 
   let onUpdate = null;
   let timer = null;
-  let lastSnapshot = "";
+  let lastById = new Map(); // matchId → serialized rec, for change detection
 
   const localName = (n) => TEAM_ALIASES[n] || n;
 
@@ -192,14 +192,37 @@ const liveScores = (() => {
     }
   }
 
-  // One poll: full tournament calendar (one request, all 104 matches), then
-  // timelines only for live matches + recently-finished ones not yet cached.
-  async function poll() {
-    const now = Date.now();
+  // The full calendar (104 matches, heavy) is cached and refreshed at the idle
+  // cadence; live polls reuse it and get fresh scores/phases from the small
+  // /live/football/now payload instead.
+  let calMatches = null;
+  let calAt = 0;
+  const CALENDAR_TTL_MS = POLL_IDLE_MS;
+
+  async function fetchCalendar() {
     const data = await fetchJSON(
       `${API}/calendar/matches?idCompetition=${ID_COMPETITION}&idSeason=${ID_SEASON}&language=en&count=500`
     );
-    const matches = data.Results || [];
+    calMatches = data.Results || [];
+    calAt = Date.now();
+    return calMatches;
+  }
+
+  // Live timelines are heavier than scores: refetch them only every other
+  // 30s tick (or immediately when a score changes), reusing the last parse
+  // in between. IdMatch → {scorers, cards}.
+  const liveTL = new Map();
+  let pollCount = 0;
+
+  // One poll: calendar (cached), then timelines only for live matches +
+  // recently-finished ones not yet cached.
+  async function poll() {
+    const now = Date.now();
+    const tlTick = (++pollCount) % 2 === 1; // timelines on every other poll
+    const prevOverlay = new Map(overlay);
+    let matches = (calMatches && now - calAt < CALENDAR_TTL_MS)
+      ? calMatches
+      : await fetchCalendar();
     const ko = getKnockoutAssignments();
     let anyLive = false;
     let nextKickoff = Infinity;
@@ -220,6 +243,12 @@ const liveScores = (() => {
           });
         }
       } catch { /* phase labels are optional — minute fallback still works */ }
+      // A match the cached calendar thinks is live but the live feed no longer
+      // lists has likely just finished — refresh the calendar for final data.
+      if (now - calAt > POLL_LIVE_MS &&
+          matches.some((fm) => liveness(fm, now).isLive && !phaseByMatch.has(fm.IdMatch))) {
+        matches = await fetchCalendar();
+      }
     }
 
     overlay.clear();
@@ -265,9 +294,17 @@ const liveScores = (() => {
       // refreshed every poll while live. Legacy cache entries (a bare scorers
       // array, pre-cards) are refetched while recent to pick up cards.
       const cached = scorerCache[fm.IdMatch];
+      const prevRec = prevOverlay.get(matchId(fixture));
+      const scoreChanged = prevRec &&
+        (prevRec.score1 !== rec.score1 || prevRec.score2 !== rec.score2);
+      const tl = liveTL.get(fm.IdMatch);
       if (finished && cached && !Array.isArray(cached)) {
         if (cached.scorers && cached.scorers.length) rec.scorers = cached.scorers;
         if (cached.cards && cached.cards.length) rec.cards = cached.cards;
+      } else if (isLive && tl && !tlTick && !scoreChanged) {
+        // off-tick: reuse the last timeline parse
+        if (tl.scorers.length) rec.scorers = tl.scorers;
+        if (tl.cards.length) rec.cards = tl.cards;
       } else if (isLive || (finished && now - kickoff < TIMELINE_RECENT_MS)) {
         const rt = resolveMatchTeams(fixture, ko);
         timelineJobs.push({
@@ -290,6 +327,7 @@ const liveScores = (() => {
         const cards = parseCards(tl, t1, t2);
         if (scorers.length) rec.scorers = scorers;
         if (cards.length) rec.cards = cards;
+        liveTL.set(fm.IdMatch, { scorers, cards });
         if (finished) {
           scorerCache[fm.IdMatch] = { scorers, cards };
           cacheDirty = true;
@@ -298,14 +336,15 @@ const liveScores = (() => {
     }));
     if (cacheDirty) persistScorerCache();
 
-    const snapshot = JSON.stringify(
-      [...overlay.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    );
-    const changed = snapshot !== lastSnapshot;
-    if (changed) lastSnapshot = snapshot;
-    // Always notify (not only on change): the app also runs admin
+    const byId = new Map();
+    for (const [id, rec] of overlay) byId.set(id, JSON.stringify(rec));
+    const changedIds = [];
+    for (const [id, s] of byId) if (lastById.get(id) !== s) changedIds.push(id);
+    for (const id of lastById.keys()) if (!byId.has(id)) changedIds.push(id);
+    lastById = byId;
+    // Always notify (even with no changes): the app also runs admin
     // housekeeping after each poll (archiving finished results to Appwrite).
-    if (onUpdate) onUpdate(changed);
+    if (onUpdate) onUpdate(changedIds);
 
     if (anyLive) return POLL_LIVE_MS;
     if (nextKickoff < Infinity) {

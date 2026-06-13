@@ -209,6 +209,8 @@ body.is-viewer .score-input:disabled {
 
 /* ---------- Modal (login) ---------- */
 body.modal-open { overflow: hidden; }
+/* Mobile: body overflow alone doesn't stop touch-scrolling the page behind */
+html:has(body.modal-open) { overflow: hidden; overscroll-behavior: none; }
 
 .modal {
   position: fixed;
@@ -235,6 +237,7 @@ body.modal-open { overflow: hidden; }
 .modal-backdrop {
   position: absolute;
   inset: 0;
+  touch-action: none;
   background: rgba(7, 11, 24, 0.75);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -619,6 +622,36 @@ body.modal-open { overflow: hidden; }
 }
 .stats-btn:active { transform: translateY(0); box-shadow: none; }
 
+/* Update toast (new service worker took over) */
+.update-toast {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(180deg, var(--bg-elev) 0%, var(--bg-card) 100%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  animation: modalPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.update-toast button {
+  background: linear-gradient(135deg, var(--accent), var(--gold));
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
+
 /* Match Stats modal */
 .stats-modal { max-width: 440px; }
 .stats-teams {
@@ -654,6 +687,7 @@ body.modal-open { overflow: hidden; }
 .stats-body {
   max-height: 60vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   margin: 12px 0 4px;
 }
 .stats-msg { color: var(--text-dim); font-size: 13px; margin: 18px 0; }

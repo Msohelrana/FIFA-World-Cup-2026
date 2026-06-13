@@ -221,9 +221,34 @@ function showConfirm(message, opts = {}) {
 }
 
 // --- Results storage ---
+// Repair a result record: card entries don't belong in the scorers list
+// (a pre-cards client could mix them in via the shared Appwrite attribute),
+// and the cards list must hold no duplicates.
+function sanitizeResult(r) {
+  if (!r) return r;
+  if (Array.isArray(r.scorers) && r.scorers.some(s => s && s.card)) {
+    const cards = r.scorers.filter(s => s && s.card);
+    r.scorers = r.scorers.filter(s => s && !s.card);
+    if (!Array.isArray(r.cards) || r.cards.length === 0) r.cards = cards;
+    if (r.scorers.length === 0) delete r.scorers;
+  }
+  if (Array.isArray(r.cards)) {
+    const seen = new Set();
+    r.cards = r.cards.filter(c => {
+      const k = `${c.team}|${c.name}|${c.minute}|${c.card}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+  return r;
+}
+
 function loadResults() {
   try {
-    return JSON.parse(localStorage.getItem(RESULTS_KEY)) || {};
+    const all = JSON.parse(localStorage.getItem(RESULTS_KEY)) || {};
+    for (const k in all) sanitizeResult(all[k]);
+    return all;
   } catch {
     return {};
   }
@@ -644,7 +669,8 @@ function renderMatchCard(m, highlightTeam, ko) {
 // --- Scorers ---
 function getScorers(m) {
   const r = getResult(m);
-  return (r && Array.isArray(r.scorers)) ? r.scorers : [];
+  // Guard: card entries can never display as goals (legacy mixed data)
+  return (r && Array.isArray(r.scorers)) ? r.scorers.filter(s => s && !s.card) : [];
 }
 
 // Bookings come only from the FIFA API (no manual admin entry) — display-only.
@@ -664,6 +690,7 @@ function getKnownScorerNamesForTeam(teamName) {
     if (!r || !Array.isArray(r.scorers) || r.scorers.length === 0) continue;
     const { team1, team2 } = resolveMatchTeams(fx, ko);
     for (const s of r.scorers) {
+      if (s && s.card) continue; // card entry, not a goal (legacy mixed data)
       const sideTeam = s.team === 1 ? team1 : team2;
       if (sideTeam === teamName) {
         const n = (s.name || "").trim();
@@ -1602,6 +1629,7 @@ function computeTopScorers() {
     const { team1, team2 } = resolveMatchTeams(m, ko);
     if (!team1 || !team2) continue;        // unresolved KO match — skip
     for (const s of r.scorers) {
+      if (s && s.card) continue; // card entry, not a goal (legacy mixed data)
       const teamName = s.team === 1 ? team1 : team2;
       if (!teamName) continue;
       const name = (s.name || "").trim();
@@ -3300,7 +3328,7 @@ const appwriteSync = (() => {
       if (scorers.length) r.scorers = scorers;
       if (cards.length) r.cards = cards;
     }
-    return r;
+    return sanitizeResult(r);
   }
 
   function resultToPayload(matchId, r) {
@@ -3313,7 +3341,7 @@ const appwriteSync = (() => {
       // Array attribute: one JSON-encoded scorer per element; card entries
       // ride along in the same attribute, distinguished by their `card` field
       scorers: [
-        ...(Array.isArray(r.scorers) ? r.scorers : []).map(s => JSON.stringify(s)),
+        ...(Array.isArray(r.scorers) ? r.scorers : []).filter(s => s && !s.card).map(s => JSON.stringify(s)),
         ...(Array.isArray(r.cards) ? r.cards : []).map(c => JSON.stringify(c)),
       ],
     };
@@ -4280,13 +4308,30 @@ function archiveFinishedApiResults() {
 }
 
 if (typeof liveScores !== "undefined") {
-  liveScores.start((changed) => {
+  let lastLiveKo = ""; // knockout assignments at last poll, serialized
+  liveScores.start((changedIds) => {
     const archived = archiveFinishedApiResults();
-    if (!changed && !archived) return;
+    if (!changedIds.length && !archived) return;
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest(".result-row, .scorer-form")) return;
-    rerenderActive();
+    if (state.view !== "schedule") { rerenderActive(); return; }
+    // Schedule view: replace only the changed match cards — unless knockout
+    // assignments shifted, which can rename teams in unrelated cards.
+    const ko = getKnockoutAssignments();
+    const koJSON = JSON.stringify(ko);
+    if (koJSON !== lastLiveKo) {
+      lastLiveKo = koJSON;
+      rerenderActive();
+      return;
+    }
+    for (const id of changedIds) {
+      const row = document.querySelector(`.result-row[data-mid="${CSS.escape(id)}"]`);
+      const card = row && row.closest(".match-card");
+      if (!card) continue; // not rendered under the current filters
+      const m = FIXTURES.find((fx) => matchId(fx) === id);
+      if (m) card.replaceWith(renderMatchCard(m, state.selectedTeam, ko));
+    }
   });
 }
 
@@ -4310,13 +4355,17 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
       })
       .catch((err) => console.warn("Service worker registration failed:", err));
 
-    // When the active SW changes (new version took over), reload once so the app
-    // picks up fresh assets. Guard against the reload loop with a session flag.
-    let reloaded = false;
+    // When the active SW changes (new version took over), offer a refresh
+    // instead of yanking the page out from under the user.
+    let toastShown = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (reloaded) return;
-      reloaded = true;
-      window.location.reload();
+      if (toastShown) return;
+      toastShown = true;
+      const t = document.createElement("div");
+      t.className = "update-toast";
+      t.innerHTML = `<span>✨ New version available</span><button type="button">Refresh</button>`;
+      t.querySelector("button").addEventListener("click", () => window.location.reload());
+      document.body.appendChild(t);
     });
   });
 }
