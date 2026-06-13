@@ -3127,56 +3127,6 @@ function updateUserBtn() {
     els.userBtn.classList.remove("is-active");
     els.userBtn.title = "Sign in to join the prediction leaderboard";
   }
-  updateNotifBtn();
-}
-
-async function updateNotifBtn() {
-  const btn = document.getElementById("notifBtn");
-  if (!btn) return;
-  if (!state.currentUser || !appwritePush.available) {
-    btn.hidden = true;
-    return;
-  }
-  btn.hidden = false;
-  const status = await appwritePush.getStatus();
-  if (status === "subscribed") {
-    btn.textContent = "🔔";
-    btn.title = "Notifications on — click to turn off";
-    btn.classList.add("is-active");
-  } else if (status === "denied") {
-    btn.textContent = "🔕";
-    btn.title = "Notifications blocked — allow them in your browser settings";
-    btn.classList.remove("is-active");
-    btn.disabled = true;
-  } else {
-    btn.textContent = "🔔";
-    btn.title = "Enable match notifications";
-    btn.classList.remove("is-active");
-    btn.disabled = false;
-  }
-}
-
-async function handleNotifBtnClick() {
-  const btn = document.getElementById("notifBtn");
-  if (!btn || !state.currentUser) return;
-  const status = await appwritePush.getStatus();
-  if (status === "subscribed") {
-    btn.disabled = true;
-    try {
-      await appwritePush.unsubscribe();
-    } finally {
-      btn.disabled = false;
-    }
-  } else {
-    btn.disabled = true;
-    try {
-      const ok = await appwritePush.subscribe();
-      if (!ok) showAlert("Notification permission was denied. You can re-enable it in your browser settings.");
-    } finally {
-      btn.disabled = false;
-    }
-  }
-  await updateNotifBtn();
 }
 
 function openAuthModal(mode = "signin") {
@@ -3244,7 +3194,6 @@ function openAuthModal(mode = "signin") {
       updateUserBtn();
       close();
       await afterLogin();
-      appwritePush.syncOnLogin();
       rerenderActive();           // re-render so admin-only UI appears immediately
     } catch (ex) {
       err.textContent = (ex && ex.message) || "Authentication error.";
@@ -3269,7 +3218,6 @@ async function logoutUser() {
     title: "Sign out", icon: "👤", iconType: "info", confirmLabel: "Sign out",
   });
   if (!ok) return;
-  await appwritePush.cleanOnLogout();
   await appwriteAuth.logOut();
   state.currentUser = null;
   setAdmin(false);                 // any admin powers go away with logout
@@ -3281,8 +3229,6 @@ els.userBtn.addEventListener("click", () => {
   if (state.currentUser) logoutUser();
   else openAuthModal("signin");
 });
-
-document.getElementById("notifBtn")?.addEventListener("click", handleNotifBtnClick);
 
 // First-login migration: push any local picks up so the user's account adopts them.
 async function afterLogin() {
@@ -3318,8 +3264,6 @@ async function afterLogin() {
 }
 
 // ===== Appwrite real-time sync =====
-const VAPID_PUBLIC_KEY = "BPUwFJ5Yf2hKd2Pi_V5B17W4BAWOSDkZyw9RAkwjfPNS5fDCVgq4sX56hPopTfi1AdzntWMaVCyfUtNLIOWpfno";
-
 const APPWRITE_CONFIG = {
   endpoint: "https://sgp.cloud.appwrite.io/v1",
   projectId: "6a264e98000a60c067f3",
@@ -3327,9 +3271,6 @@ const APPWRITE_CONFIG = {
   resultsCollection: "matchresults",
   standingsCollection: "standingsoverrides",
   userPicksCollection: "userpicks",
-  pushSubscriptionsCollection: "pushsubscriptions",
-  kickoffLogCollection: "kickofflog",
-  pushFunctionId: "6a2cfbe000018c09a776",
 };
 
 const appwriteSync = (() => {
@@ -3708,114 +3649,6 @@ const appwriteAuth = (() => {
   return { available: true, getCurrent, signUp, logIn, logOut };
 })();
 
-// ===== Web Push notifications =====
-const appwritePush = (() => {
-  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
-    return { available: false, subscribe() {}, unsubscribe() {}, syncOnLogin() {}, cleanOnLogout() {}, triggerKickoff() {} };
-  }
-  if (typeof window.Appwrite === "undefined") {
-    return { available: false, subscribe() {}, unsubscribe() {}, syncOnLogin() {}, cleanOnLogout() {}, triggerKickoff() {} };
-  }
-
-  const { Client, Databases, Functions } = window.Appwrite;
-
-  function makeClient() {
-    return new Client().setEndpoint(APPWRITE_CONFIG.endpoint).setProject(APPWRITE_CONFIG.projectId);
-  }
-
-  function urlBase64ToUint8Array(b64) {
-    const pad = "=".repeat((4 - b64.length % 4) % 4);
-    const base64 = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
-    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
-  }
-
-  async function getBrowserSub() {
-    try {
-      const reg = await navigator.serviceWorker.ready;
-      return await reg.pushManager.getSubscription();
-    } catch { return null; }
-  }
-
-  async function saveSub(sub) {
-    if (!state.currentUser) return;
-    const db = new Databases(makeClient());
-    const json = sub.toJSON();
-    const payload = {
-      endpoint: json.endpoint,
-      p256dh: json.keys.p256dh,
-      auth: json.keys.auth,
-      userId: state.currentUser.id,
-    };
-    const docId = state.currentUser.id;
-    try {
-      await db.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.pushSubscriptionsCollection, docId, payload);
-    } catch (e) {
-      if (e.code === 409) {
-        await db.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.pushSubscriptionsCollection, docId, payload);
-      }
-    }
-  }
-
-  async function deleteSub() {
-    if (!state.currentUser) return;
-    const db = new Databases(makeClient());
-    try {
-      await db.deleteDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.pushSubscriptionsCollection, state.currentUser.id);
-    } catch (e) {
-      if (e.code !== 404) console.warn("Push sub delete:", e.message);
-    }
-  }
-
-  async function subscribe() {
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") return false;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-    });
-    await saveSub(sub);
-    return true;
-  }
-
-  async function unsubscribe() {
-    const sub = await getBrowserSub();
-    if (sub) await sub.unsubscribe();
-    await deleteSub();
-  }
-
-  async function syncOnLogin() {
-    const sub = await getBrowserSub();
-    if (sub) await saveSub(sub);
-  }
-
-  async function cleanOnLogout() {
-    await deleteSub();
-  }
-
-  async function getStatus() {
-    if (Notification.permission === "denied") return "denied";
-    const sub = await getBrowserSub();
-    return sub ? "subscribed" : "unsubscribed";
-  }
-
-  async function triggerKickoff(mid, team1, team2) {
-    if (!APPWRITE_CONFIG.pushFunctionId || !state.currentUser) return;
-    try {
-      const fn = new Functions(makeClient());
-      await fn.createExecution(
-        APPWRITE_CONFIG.pushFunctionId,
-        JSON.stringify({ type: "kickoff", matchId: mid, team1, team2 }),
-        true // async execution
-      );
-    } catch (e) {
-      console.warn("Kickoff push failed:", e.message);
-    }
-  }
-
-  return { available: true, subscribe, unsubscribe, syncOnLogin, cleanOnLogout, getStatus, triggerKickoff };
-})();
-
 // ===== Compact picks encoding (fits 104 matches in < 1 KB) =====
 // Format: comma-separated tokens, one per fixture in FIXTURES order.
 //   ""       no pick
@@ -4163,7 +3996,6 @@ if (appwriteAuth.available) {
       state.currentUser = user;
       setAdmin(isUserAdmin(user));    // restore admin status from user identity
       updateUserBtn();
-      appwritePush.syncOnLogin();
     }
     return userPicksSync.fetchAll();
   }).then(all => {
@@ -4480,34 +4312,8 @@ function archiveFinishedApiResults() {
 
 if (typeof liveScores !== "undefined") {
   let lastLiveKo = ""; // knockout assignments at last poll, serialized
-  // Track which matches have already fired a kickoff notification this session
-  const notifiedKickoffs = new Set(
-    JSON.parse(localStorage.getItem("wc26_notifiedKickoffs") || "[]")
-  );
-
   liveScores.start((changedIds) => {
     const archived = archiveFinishedApiResults();
-
-    // Kickoff notifications: fire once per match that just went live
-    if (appwritePush.available && APPWRITE_CONFIG.pushFunctionId) {
-      const ko = getKnockoutAssignments();
-      for (const id of changedIds) {
-        if (notifiedKickoffs.has(id)) continue;
-        const rec = liveScores.get(id);
-        if (rec && rec.isLive) {
-          notifiedKickoffs.add(id);
-          try {
-            localStorage.setItem("wc26_notifiedKickoffs", JSON.stringify([...notifiedKickoffs]));
-          } catch { /* quota */ }
-          const m = FIXTURES.find(fx => matchId(fx) === id);
-          if (m) {
-            const { team1, team2 } = resolveMatchTeams(m, ko);
-            appwritePush.triggerKickoff(id, team1 || m.team1, team2 || m.team2);
-          }
-        }
-      }
-    }
-
     if (!changedIds.length && !archived) return;
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;

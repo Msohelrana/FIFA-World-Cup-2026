@@ -120,36 +120,3 @@ self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") self.skipWaiting();
 });
 
-// ── Web Push ──────────────────────────────────────────────────────────────────
-self.addEventListener("push", (event) => {
-  let data = { title: "⚽ FIFA WC 2026", body: "Match update", tag: "wc2026" };
-  try {
-    if (event.data) Object.assign(data, event.data.json());
-  } catch { /* malformed payload — use defaults */ }
-
-  event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "./icon.png",
-      badge: "./icon.png",
-      tag: data.tag || "wc2026",
-      renotify: true,
-      data: { url: "./" },
-    })
-  );
-});
-
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const target = event.notification.data?.url || "./";
-  event.waitUntil(
-    clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((wins) => {
-        for (const w of wins) {
-          if (w.url.includes(self.location.origin) && "focus" in w) return w.focus();
-        }
-        return clients.openWindow(target);
-      })
-  );
-});
