@@ -454,10 +454,17 @@ function populateTimezones() {
 // --- Timezone helpers ---
 // Fixture times are stored as "HH:MM ET" on a given date.
 // ET in June/July is EDT = UTC-4 (the entire 2026 World Cup falls inside DST).
+const _fixtureUtcCache = new Map();
 function fixtureToUTC(m) {
-  const [hh, mm] = m.time.split(" ")[0].split(":").map(Number);
-  const [y, mo, d] = m.date.split("-").map(Number);
-  return new Date(Date.UTC(y, mo - 1, d, hh + 4, mm));
+  const key = matchId(m);
+  let cached = _fixtureUtcCache.get(key);
+  if (!cached) {
+    const [hh, mm] = m.time.split(" ")[0].split(":").map(Number);
+    const [y, mo, d] = m.date.split("-").map(Number);
+    cached = new Date(Date.UTC(y, mo - 1, d, hh + 4, mm));
+    _fixtureUtcCache.set(key, cached);
+  }
+  return cached;
 }
 
 function dateKeyInTz(date, tz) {
@@ -1322,6 +1329,72 @@ function computeStandings(groupLetter) {
   return sorted;
 }
 
+function buildStandingsTable(letter, thirdQualifyingGroups) {
+  const rows = computeStandings(letter);
+  const table = document.createElement("div");
+  table.className = "standings-table";
+  table.dataset.group = letter;
+  const hasOverride = Array.isArray(state.standingsOverride[letter]) &&
+    state.standingsOverride[letter].length > 0;
+  const resetBtnHTML = (state.isAdmin && hasOverride)
+    ? `<button class="reset-order-btn" data-group="${letter}" title="Reset to computed order">↻ Reset order</button>`
+    : "";
+  table.innerHTML = `
+    <h3>Group ${letter} ${resetBtnHTML}</h3>
+    <table>
+      <thead>
+        <tr>
+          <th class="pos">#</th>
+          <th class="team-col">Team</th>
+          <th>P</th><th>W</th><th>D</th><th>L</th>
+          <th>GF</th><th>GA</th><th>GD</th><th class="pts">Pts</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map((r, i) => {
+    let cls = "";
+    if (i < 2) cls = "qualify";
+    else if (i === 2 && thirdQualifyingGroups.has(letter)) cls = "qualify-third";
+    const moveBtns = state.isAdmin
+      ? `<span class="row-move">
+                 <button class="row-move-btn" data-group="${letter}" data-from="${i}" data-dir="-1" ${i === 0 ? "disabled" : ""} title="Move up">▲</button>
+                 <button class="row-move-btn" data-group="${letter}" data-from="${i}" data-dir="1" ${i === rows.length - 1 ? "disabled" : ""} title="Move down">▼</button>
+               </span>`
+      : "";
+    return `
+          <tr class="${cls}">
+            <td class="pos">${i + 1}${moveBtns}</td>
+            <td class="team-col"><span class="flag">${flagFor(r.team)}</span>${r.team}</td>
+            <td>${r.played}</td>
+            <td>${r.wins}</td>
+            <td>${r.draws}</td>
+            <td>${r.losses}</td>
+            <td>${r.gf}</td>
+            <td>${r.ga}</td>
+            <td>${r.gd > 0 ? "+" + r.gd : r.gd}</td>
+            <td class="pts">${r.points}</td>
+          </tr>`;
+  }).join("")}
+      </tbody>
+    </table>
+  `;
+  return table;
+}
+
+// Patch only the standings tables for the given group letters —
+// leaves the intro section and all other group tables untouched.
+function patchStandingsTables(changedGroups) {
+  const grid = els.standingsView.querySelector(".standings-grid");
+  if (!grid) { renderStandings(); return; }
+  const ko = getKnockoutAssignments();
+  const thirdQualifyingGroups = new Set(ko.complete ? ko.top8.map(t => t.group) : []);
+  for (const letter of changedGroups) {
+    const existing = grid.querySelector(`.standings-table[data-group="${letter}"]`);
+    if (!existing) continue;
+    existing.replaceWith(buildStandingsTable(letter, thirdQualifyingGroups));
+  }
+}
+
 function renderStandings() {
   els.standingsView.innerHTML = "";
 
@@ -1449,53 +1522,7 @@ function renderStandings() {
 
   const letters = Object.keys(GROUPS).sort();
   for (const letter of letters) {
-    const rows = computeStandings(letter);
-    const table = document.createElement("div");
-    table.className = "standings-table";
-    const hasOverride = Array.isArray(state.standingsOverride[letter]) &&
-      state.standingsOverride[letter].length > 0;
-    const resetBtnHTML = (state.isAdmin && hasOverride)
-      ? `<button class="reset-order-btn" data-group="${letter}" title="Reset to computed order">↻ Reset order</button>`
-      : "";
-    table.innerHTML = `
-      <h3>Group ${letter} ${resetBtnHTML}</h3>
-      <table>
-        <thead>
-          <tr>
-            <th class="pos">#</th>
-            <th class="team-col">Team</th>
-            <th>P</th><th>W</th><th>D</th><th>L</th>
-            <th>GF</th><th>GA</th><th>GD</th><th class="pts">Pts</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((r, i) => {
-      let cls = "";
-      if (i < 2) cls = "qualify";
-      else if (i === 2 && thirdQualifyingGroups.has(letter)) cls = "qualify-third";
-      const moveBtns = state.isAdmin
-        ? `<span class="row-move">
-                   <button class="row-move-btn" data-group="${letter}" data-from="${i}" data-dir="-1" ${i === 0 ? "disabled" : ""} title="Move up">▲</button>
-                   <button class="row-move-btn" data-group="${letter}" data-from="${i}" data-dir="1" ${i === rows.length - 1 ? "disabled" : ""} title="Move down">▼</button>
-                 </span>`
-        : "";
-      return `
-            <tr class="${cls}">
-              <td class="pos">${i + 1}${moveBtns}</td>
-              <td class="team-col"><span class="flag">${flagFor(r.team)}</span>${r.team}</td>
-              <td>${r.played}</td>
-              <td>${r.wins}</td>
-              <td>${r.draws}</td>
-              <td>${r.losses}</td>
-              <td>${r.gf}</td>
-              <td>${r.ga}</td>
-              <td>${r.gd > 0 ? "+" + r.gd : r.gd}</td>
-              <td class="pts">${r.points}</td>
-            </tr>`;
-    }).join("")}
-        </tbody>
-      </table>
-    `;
+    const table = buildStandingsTable(letter, thirdQualifyingGroups);
     grid.appendChild(table);
   }
 
@@ -3092,22 +3119,28 @@ function render() {
 }
 
 // --- Events ---
+let _renderDebounceTimer = 0;
+function debouncedRender() {
+  clearTimeout(_renderDebounceTimer);
+  _renderDebounceTimer = setTimeout(render, 150);
+}
+
 els.teamSelect.addEventListener("change", e => {
   state.selectedTeam = e.target.value;
   if (state.view !== "schedule") switchView("schedule");
-  else render();
+  else debouncedRender();
 });
 
 els.dateSelect.addEventListener("change", e => {
   state.selectedDate = e.target.value;
   if (state.view !== "schedule") switchView("schedule");
-  else render();
+  else debouncedRender();
 });
 
 els.tzSelect.addEventListener("change", e => {
   state.selectedTz = e.target.value;
-  populateDates(); // re-derive date options in new tz
-  render();
+  populateDates(); // re-derive date options in new tz (immediate)
+  debouncedRender();
 });
 
 els.clearBtn.addEventListener("click", () => {
@@ -4048,14 +4081,20 @@ if (appwriteAuth.available) {
   switchView("predict");
 })();
 
-// Tick every 30s to refresh countdowns and toggle LIVE state in place
+// Tick every 1s to refresh countdowns and toggle LIVE state in place
 // without rebuilding the entire DOM (which would lose input focus).
+const LIVE_WINDOW_MAX_MS = LIVE_DURATION_KO_MS; // longest possible live window
 function tickCountdowns() {
   const now = Date.now();
   const cards = document.querySelectorAll(".match-card[data-kickoff]");
   cards.forEach(card => {
     const kickoff = +card.dataset.kickoff;
     if (!kickoff) return;
+    const diff = kickoff - now;
+    // Skip cards that are already ended (well past live window) — nothing to update
+    if (diff < -LIVE_WINDOW_MAX_MS) return;
+    // Skip cards > 24h away on sub-minute ticks — their text won't change
+    if (diff > 24 * 60 * 60 * 1000 && _tickN % 60 !== 0) return;
     const stage = card.dataset.stage || "group";
     const mid = card.querySelector(".result-row")?.dataset.mid;
     const cdFinal = applyLiveChip(mid, formatCountdownDirect(kickoff, stage, now));
@@ -4345,6 +4384,41 @@ if (typeof liveScores !== "undefined") {
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest(".result-row, .scorer-form")) return;
+    // Groups view is static (team names only) — live scores never affect it
+    if (state.view === "groups") return;
+    // Standings: patch only the tables for groups with changed matches.
+    // Full re-render only when a match finishes (archived) since that can
+    // shift third-place qualification and reorder multiple groups at once.
+    if (state.view === "standings") {
+      if (archived) { renderStandings(); return; }
+      const changedGroups = new Set(
+        changedIds.flatMap(id => {
+          const m = FIXTURES.find(fx => matchId(fx) === id);
+          return m && m.group ? [m.group] : [];
+        })
+      );
+      if (changedGroups.size) patchStandingsTables(changedGroups);
+      return;
+    }
+    // Bracket: group-stage goals don't change bracket slots — only re-render
+    // if a KO match changed (live score in that box) or a match was archived.
+    if (state.view === "bracket") {
+      const hasKoChange = archived || changedIds.some(id => {
+        const m = FIXTURES.find(fx => matchId(fx) === id);
+        return m && m.stage !== "group";
+      });
+      if (hasKoChange) renderBracket();
+      return;
+    }
+    // Scorers: reads state.results only — live goals aren't stored there until
+    // archiveFinishedApiResults() runs, so only update when a match finishes.
+    if (state.view === "scorers") {
+      if (archived) renderTopScorers();
+      return;
+    }
+    // Predict / Picks: input locking is driven by tickCountdowns (every 30s).
+    // A live score change has nothing to update in either view.
+    if (state.view === "predict" || state.view === "picks") return;
     if (state.view !== "schedule") { rerenderActive(); return; }
     // Schedule view: replace only the changed match cards — unless knockout
     // assignments shifted, which can rename teams in unrelated cards.
