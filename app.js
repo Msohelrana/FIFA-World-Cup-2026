@@ -1008,13 +1008,63 @@ function wireScoreInputs(card, m, t1, t2, teamsKnown) {
   if (p2) p2.addEventListener("input", onChange);
 }
 
+let _showOldFinished = false;
+let _picksShowOldFinished = false;
+
+function renderScheduleDayGroups(byDate, filterTeam, ko, container) {
+  const sortedDates = [...byDate.keys()].sort();
+  for (const key of sortedDates) {
+    const dayMatches = byDate.get(key);
+    dayMatches.sort((a, b) => fixtureToUTC(a).getTime() - fixtureToUTC(b).getTime());
+    const dayGroup = document.createElement("div");
+    dayGroup.className = "day-group";
+    const count = dayMatches.length;
+    const header = document.createElement("div");
+    header.className = "day-header";
+    header.innerHTML = `
+      <span class="day-date">${formatLocalDateLabel(key)}</span>
+      <span class="day-count">${count} ${count === 1 ? "match" : "matches"}</span>
+    `;
+    dayGroup.appendChild(header);
+    const list = document.createElement("div");
+    list.className = "match-list";
+    for (const m of dayMatches) list.appendChild(renderMatchCard(m, filterTeam, ko));
+    dayGroup.appendChild(list);
+    container.appendChild(dayGroup);
+  }
+}
+
+function renderPicksDayGroups(byDate, ko, container) {
+  const sortedDates = [...byDate.keys()].sort();
+  for (const key of sortedDates) {
+    const dayMatches = byDate.get(key);
+    dayMatches.sort((a, b) => fixtureToUTC(a).getTime() - fixtureToUTC(b).getTime());
+    const dayGroup = document.createElement("div");
+    dayGroup.className = "day-group";
+    const count = dayMatches.length;
+    const header = document.createElement("div");
+    header.className = "day-header";
+    header.innerHTML = `
+      <span class="day-date">${formatLocalDateLabel(key)}</span>
+      <span class="day-count">${count} ${count === 1 ? "match" : "matches"}</span>
+    `;
+    dayGroup.appendChild(header);
+    const list = document.createElement("div");
+    list.className = "match-list";
+    for (const m of dayMatches) list.appendChild(renderPickCard(m, ko));
+    dayGroup.appendChild(list);
+    container.appendChild(dayGroup);
+  }
+}
+
 function renderSchedule(filterTeam, filterDate) {
   els.scheduleView.innerHTML = "";
   const tz = state.selectedTz;
   const ko = getKnockoutAssignments();
+  const now = Date.now();
+  const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
 
   if (ko.complete) {
-    // Check if the Final is decided
     const finalMatch = FIXTURES.find(f => f.stage === "final");
     const champion = finalMatch ? getKnockoutOutcome(finalMatch, "winner", ko) : null;
     const banner = document.createElement("div");
@@ -1028,7 +1078,7 @@ function renderSchedule(filterTeam, filterDate) {
     els.scheduleView.appendChild(banner);
   }
 
-  // Collect live matches first (shown pinned at top, ignoring date filter)
+  // ── Live Now (pinned at top) ──────────────────────────────────────────────
   const liveMatches = FIXTURES.filter(m => {
     if (!matchInvolves(m, filterTeam, ko)) return false;
     return applyLiveChip(matchId(m), formatCountdown(m)).state === "live";
@@ -1038,7 +1088,6 @@ function renderSchedule(filterTeam, filterDate) {
   if (liveMatches.length > 0) {
     const liveGroup = document.createElement("div");
     liveGroup.className = "day-group live-now-group";
-
     const liveHeader = document.createElement("div");
     liveHeader.className = "day-header live-now-header";
     liveHeader.innerHTML = `
@@ -1046,61 +1095,89 @@ function renderSchedule(filterTeam, filterDate) {
       <span class="day-count">${liveMatches.length} ${liveMatches.length === 1 ? "match" : "matches"}</span>
     `;
     liveGroup.appendChild(liveHeader);
-
     const liveList = document.createElement("div");
     liveList.className = "match-list";
-    for (const m of liveMatches) {
-      liveList.appendChild(renderMatchCard(m, filterTeam, ko));
-    }
+    for (const m of liveMatches) liveList.appendChild(renderMatchCard(m, filterTeam, ko));
     liveGroup.appendChild(liveList);
     els.scheduleView.appendChild(liveGroup);
   }
 
-  // Bucket by date-key in selected timezone
-  const byDate = new Map();
+  // ── Bucket remaining matches into 3 groups ────────────────────────────────
+  const upcomingByDate = new Map();
+  const recentByDate   = new Map();
+  const oldByDate      = new Map();
+
   for (const m of FIXTURES) {
     if (!matchInvolves(m, filterTeam, ko)) continue;
-    if (liveIds.has(matchId(m))) continue; // already shown in Live Now section
+    const mid = matchId(m);
+    if (liveIds.has(mid)) continue;
     const key = dateKeyInTz(fixtureToUTC(m), tz);
     if (filterDate && key !== filterDate) continue;
-    if (!byDate.has(key)) byDate.set(key, []);
-    byDate.get(key).push(m);
+    const kickoffMs = fixtureToUTC(m).getTime();
+    const cd = applyLiveChip(mid, formatCountdown(m));
+    let bucket;
+    if (cd.state === "ended" && now - kickoffMs >= TWENTY_FOUR_H) bucket = oldByDate;
+    else if (cd.state === "ended")                                  bucket = recentByDate;
+    else                                                            bucket = upcomingByDate;
+    if (!bucket.has(key)) bucket.set(key, []);
+    bucket.get(key).push(m);
   }
 
-  if (byDate.size === 0 && liveMatches.length === 0) {
+  const hasAny = liveMatches.length > 0 || upcomingByDate.size > 0
+               || recentByDate.size > 0 || oldByDate.size > 0;
+  if (!hasAny) {
     els.scheduleView.innerHTML = `<div class="empty">No matches found for the selected filters.</div>`;
     return;
   }
 
-  const sortedDates = [...byDate.keys()].sort();
+  // ── Section: Finished > 24h (collapsed, at top) ──────────────────────────
+  if (oldByDate.size > 0) {
+    const totalOld = [...oldByDate.values()].reduce((s, a) => s + a.length, 0);
+    const sec = document.createElement("div");
+    sec.className = "schedule-section schedule-section-archived";
 
-  for (const key of sortedDates) {
-    const dayMatches = byDate.get(key);
-    // Sort matches within a day chronologically (AM → PM in selected tz).
-    // Comparing UTC ms is equivalent to comparing local time when both
-    // matches fall on the same local calendar day, which they do here.
-    dayMatches.sort((a, b) => fixtureToUTC(a).getTime() - fixtureToUTC(b).getTime());
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "schedule-archive-toggle";
+    toggleBtn.innerHTML = _showOldFinished
+      ? `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+      : `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
+    sec.appendChild(toggleBtn);
 
-    const dayGroup = document.createElement("div");
-    dayGroup.className = "day-group";
+    const archiveBody = document.createElement("div");
+    archiveBody.className = "schedule-archive-body";
+    archiveBody.style.display = _showOldFinished ? "" : "none";
+    renderScheduleDayGroups(oldByDate, filterTeam, ko, archiveBody);
+    sec.appendChild(archiveBody);
 
-    const header = document.createElement("div");
-    header.className = "day-header";
-    const count = dayMatches.length;
-    header.innerHTML = `
-      <span class="day-date">${formatLocalDateLabel(key)}</span>
-      <span class="day-count">${count} ${count === 1 ? "match" : "matches"}</span>
-    `;
-    dayGroup.appendChild(header);
+    toggleBtn.addEventListener("click", () => {
+      _showOldFinished = !_showOldFinished;
+      archiveBody.style.display = _showOldFinished ? "" : "none";
+      toggleBtn.innerHTML = _showOldFinished
+        ? `🏁 Previous Results <span class="archive-badge">${totalOld}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▼</span>`
+        : `🏁 Previous Results <span class="archive-badge">${totalOld}</span><span class="archive-chevron" style="margin-left:auto">Show ▶</span>`;
+    });
 
-    const list = document.createElement("div");
-    list.className = "match-list";
-    for (const m of dayMatches) {
-      list.appendChild(renderMatchCard(m, filterTeam, ko));
-    }
-    dayGroup.appendChild(list);
+    els.scheduleView.appendChild(sec);
+  }
 
-    els.scheduleView.appendChild(dayGroup);
+  // ── Section: Recently Finished (< 24h) ───────────────────────────────────
+  if (recentByDate.size > 0) {
+    const totalRecent = [...recentByDate.values()].reduce((s, a) => s + a.length, 0);
+    const sec = document.createElement("div");
+    sec.className = "schedule-section";
+    sec.innerHTML = `<div class="schedule-section-header recent-header"><span class="schedule-section-title recent-title">✅ Recently Finished</span><span class="schedule-section-count">${totalRecent} ${totalRecent === 1 ? "match" : "matches"}</span></div>`;
+    els.scheduleView.appendChild(sec);
+    renderScheduleDayGroups(recentByDate, filterTeam, ko, els.scheduleView);
+  }
+
+  // ── Section: Upcoming ─────────────────────────────────────────────────────
+  if (upcomingByDate.size > 0) {
+    const sec = document.createElement("div");
+    sec.className = "schedule-section";
+    sec.innerHTML = `<div class="schedule-section-header upcoming-header"><span class="schedule-section-title upcoming-title">📅 Upcoming</span></div>`;
+    els.scheduleView.appendChild(sec);
+    renderScheduleDayGroups(upcomingByDate, filterTeam, ko, els.scheduleView);
   }
 }
 
@@ -1794,36 +1871,76 @@ function renderPicks() {
   // Leaderboard renders inline only when toggled on
   if (state.showLeaderboard) view.appendChild(renderPicksLeaderboard());
 
-  // Group matches by date in selected tz, like the schedule view
+  // Bucket matches into three sections
   const tz = state.selectedTz;
-  const ko = getKnockoutAssignments();           // resolve teams via admin's official results
-  const byDate = new Map();
+  const ko = getKnockoutAssignments();
+  const now = Date.now();
+  const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
+
+  const upcomingByDate = new Map();
+  const recentByDate   = new Map();
+  const oldByDate      = new Map();
+
   for (const m of FIXTURES) {
     const key = dateKeyInTz(fixtureToUTC(m), tz);
-    if (!byDate.has(key)) byDate.set(key, []);
-    byDate.get(key).push(m);
+    const kickoffMs = fixtureToUTC(m).getTime();
+    const cd = formatCountdown(m);
+    let bucket;
+    if (cd.state === "ended" && now - kickoffMs >= TWENTY_FOUR_H) bucket = oldByDate;
+    else if (cd.state === "ended")                                  bucket = recentByDate;
+    else                                                            bucket = upcomingByDate;
+    if (!bucket.has(key)) bucket.set(key, []);
+    bucket.get(key).push(m);
   }
-  const sortedDates = [...byDate.keys()].sort();
 
-  for (const key of sortedDates) {
-    const dayMatches = byDate.get(key)
-      .sort((a, b) => fixtureToUTC(a).getTime() - fixtureToUTC(b).getTime());
+  // ── Section: Finished > 24h (collapsed, at top) ──────────────────────────
+  if (oldByDate.size > 0) {
+    const totalOld = [...oldByDate.values()].reduce((s, a) => s + a.length, 0);
+    const sec = document.createElement("div");
+    sec.className = "schedule-section schedule-section-archived";
 
-    const dayGroup = document.createElement("div");
-    dayGroup.className = "day-group";
-    const count = dayMatches.length;
-    dayGroup.innerHTML = `
-      <div class="day-header">
-        <span class="day-date">${formatLocalDateLabel(key)}</span>
-        <span class="day-count">${count} ${count === 1 ? "match" : "matches"}</span>
-      </div>
-    `;
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "schedule-archive-toggle";
+    toggleBtn.innerHTML = _picksShowOldFinished
+      ? `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+      : `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
+    sec.appendChild(toggleBtn);
 
-    const list = document.createElement("div");
-    list.className = "match-list";
-    for (const m of dayMatches) list.appendChild(renderPickCard(m, ko));
-    dayGroup.appendChild(list);
-    view.appendChild(dayGroup);
+    const archiveBody = document.createElement("div");
+    archiveBody.className = "schedule-archive-body";
+    archiveBody.style.display = _picksShowOldFinished ? "" : "none";
+    renderPicksDayGroups(oldByDate, ko, archiveBody);
+    sec.appendChild(archiveBody);
+
+    toggleBtn.addEventListener("click", () => {
+      _picksShowOldFinished = !_picksShowOldFinished;
+      archiveBody.style.display = _picksShowOldFinished ? "" : "none";
+      toggleBtn.innerHTML = _picksShowOldFinished
+        ? `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+        : `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
+    });
+
+    view.appendChild(sec);
+  }
+
+  // ── Section: Recently Finished (< 24h) ───────────────────────────────────
+  if (recentByDate.size > 0) {
+    const totalRecent = [...recentByDate.values()].reduce((s, a) => s + a.length, 0);
+    const sec = document.createElement("div");
+    sec.className = "schedule-section";
+    sec.innerHTML = `<div class="schedule-section-header recent-header"><span class="schedule-section-title recent-title">✅ Recently Finished</span><span class="schedule-section-count">${totalRecent} ${totalRecent === 1 ? "match" : "matches"}</span></div>`;
+    view.appendChild(sec);
+    renderPicksDayGroups(recentByDate, ko, view);
+  }
+
+  // ── Section: Upcoming ─────────────────────────────────────────────────────
+  if (upcomingByDate.size > 0) {
+    const sec = document.createElement("div");
+    sec.className = "schedule-section";
+    sec.innerHTML = `<div class="schedule-section-header upcoming-header"><span class="schedule-section-title upcoming-title">📅 Upcoming</span></div>`;
+    view.appendChild(sec);
+    renderPicksDayGroups(upcomingByDate, ko, view);
   }
 }
 
