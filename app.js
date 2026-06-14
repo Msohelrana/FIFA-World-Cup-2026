@@ -2037,12 +2037,10 @@ function openRulesModal() {
 }
 
 function openUserPredictionsModal(userId, userName) {
-  const myId = state.currentUser && state.currentUser.id;
-  if (!state.isAdmin && myId !== userId) return; // non-admins can only view own picks
-
   const existing = document.getElementById("userPredModal");
   if (existing) existing.remove();
 
+  const myId = state.currentUser && state.currentUser.id;
   const isOwnModal = myId === userId;
   const userEntry = state.leaderboardUsers.find(u => u.userId === userId);
   const picks = userEntry ? userEntry.picks : {};
@@ -2202,9 +2200,7 @@ function renderPicksLeaderboard() {
     const bonusCell = state.isAdmin
       ? `<td class="lb-bonus"><input type="number" min="0" max="99" class="score-input lb-bonus-input" data-uid="${escapeHTML(r.userId)}" value="${r.bonus || ""}" placeholder="–" aria-label="Bonus points for ${escapeHTML(r.userName)}"></td>`
       : `<td class="lb-bonus">${r.bonus ? "+" + r.bonus : "–"}</td>`;
-    const viewBtn = (state.isAdmin || isMe)
-      ? `<button class="lb-view-btn" data-uid="${escapeHTML(r.userId)}" data-name="${escapeHTML(r.userName)}" title="View ${escapeHTML(r.userName)}'s predictions" aria-label="View ${escapeHTML(r.userName)}'s predictions">👁</button>`
-      : "";
+    const viewBtn = `<button class="lb-view-btn" data-uid="${escapeHTML(r.userId)}" data-name="${escapeHTML(r.userName)}" title="View ${escapeHTML(r.userName)}'s predictions" aria-label="View ${escapeHTML(r.userName)}'s predictions">👁</button>`;
     return `
       <tr class="${isMe ? "is-me" : ""} ${r.rank <= 3 ? "lb-top" : ""}">
         <td class="lb-rank">${medal} ${r.rank}</td>
