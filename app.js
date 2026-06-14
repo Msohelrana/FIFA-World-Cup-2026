@@ -2037,9 +2037,13 @@ function openRulesModal() {
 }
 
 function openUserPredictionsModal(userId, userName) {
+  const myId = state.currentUser && state.currentUser.id;
+  if (!state.isAdmin && myId !== userId) return; // non-admins can only view own picks
+
   const existing = document.getElementById("userPredModal");
   if (existing) existing.remove();
 
+  const isOwnModal = myId === userId;
   const userEntry = state.leaderboardUsers.find(u => u.userId === userId);
   const picks = userEntry ? userEntry.picks : {};
   const ko = getKnockoutAssignments();
@@ -2064,6 +2068,8 @@ function openUserPredictionsModal(userId, userName) {
     if (!matches || matches.length === 0) continue;
     tableHTML += `<tr class="upred-stage-row"><td colspan="4">${STAGE_LABELS_PRED[stage] || stage}</td></tr>`;
     for (const m of matches) {
+      // Non-admins viewing someone else's modal only see locked matches
+      if (!state.isAdmin && !isOwnModal && !isMatchLocked(m)) continue;
       const id = matchId(m);
       const pick = picks[id];
       const result = getResult(m);
