@@ -66,6 +66,7 @@ const state = {
   showLeaderboard: false,        // Match Predict tab: hide leaderboard behind a toggle button
   leaderboardLoaded: false,      // true once fetchAll() has been called (lazy)
   isAdmin: false,                // set by auth bootstrap once currentUser is known
+  bracketLayout: localStorage.getItem("wc26_bracketLayout") || "onesided",
 };
 
 function isViewingShared() { return !!state.sharedPrediction; }
@@ -1644,7 +1645,6 @@ function renderBracket() {
   els.bracketView.innerHTML = "";
   const ko = getKnockoutAssignments();
 
-  // If a champion exists, show a banner above the bracket
   const finalMatch = FIXTURES.find(m => m.stage === "final");
   const champion = finalMatch ? getKnockoutOutcome(finalMatch, "winner", ko) : null;
   if (champion) {
@@ -1654,41 +1654,91 @@ function renderBracket() {
     els.bracketView.appendChild(banner);
   }
 
-  const rounds = [
-    { key: "r32", label: "Round of 32" },
-    { key: "r16", label: "Round of 16" },
-    { key: "qf", label: "Quarterfinals" },
-    { key: "sf", label: "Semifinals" },
-    { key: "final", label: "Final" },
-  ];
+  // ── Layout toggle ─────────────────────────────────────────────────────────
+  const toggleBar = document.createElement("div");
+  toggleBar.className = "bracket-layout-toggle";
+  toggleBar.innerHTML = `
+    <span class="bracket-layout-label">Layout:</span>
+    <button type="button" class="bracket-layout-btn${state.bracketLayout === "onesided" ? " active" : ""}" data-layout="onesided">One-sided</button>
+    <button type="button" class="bracket-layout-btn${state.bracketLayout === "twosided" ? " active" : ""}" data-layout="twosided">Two-sided</button>
+  `;
+  toggleBar.querySelectorAll(".bracket-layout-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.bracketLayout = btn.dataset.layout;
+      localStorage.setItem("wc26_bracketLayout", state.bracketLayout);
+      renderBracket();
+    });
+  });
+  els.bracketView.appendChild(toggleBar);
 
-  const wrap = document.createElement("div");
-  wrap.className = "bracket-scroll";
+  const allR32   = getMatchesInBracketOrder("r32");
+  const allR16   = getMatchesInBracketOrder("r16");
+  const allQF    = getMatchesInBracketOrder("qf");
+  const allSF    = getMatchesInBracketOrder("sf");
+  const allFinal = getMatchesInBracketOrder("final");
 
-  const bracket = document.createElement("div");
-  bracket.className = "bracket";
-
-  for (const round of rounds) {
+  function makeRound(label, matches) {
     const col = document.createElement("div");
     col.className = "bracket-round";
     const title = document.createElement("h3");
     title.className = "bracket-round-title";
-    title.textContent = round.label;
+    title.textContent = label;
     col.appendChild(title);
-
     const matchesDiv = document.createElement("div");
     matchesDiv.className = "bracket-matches";
-    const matches = getMatchesInBracketOrder(round.key);
-    for (const m of matches) {
-      matchesDiv.appendChild(renderBracketMatch(m, ko));
-    }
+    for (const m of matches) matchesDiv.appendChild(renderBracketMatch(m, ko));
     col.appendChild(matchesDiv);
-    bracket.appendChild(col);
+    return col;
   }
-  wrap.appendChild(bracket);
+
+  const wrap = document.createElement("div");
+  wrap.className = "bracket-scroll";
+
+  if (state.bracketLayout === "twosided") {
+    const grid = document.createElement("div");
+    grid.className = "bracket-two-sided";
+
+    const leftHalf = document.createElement("div");
+    leftHalf.className = "bracket-half bracket-left";
+    leftHalf.appendChild(makeRound("Round of 32", allR32.slice(0, 8)));
+    leftHalf.appendChild(makeRound("Round of 16", allR16.slice(0, 4)));
+    leftHalf.appendChild(makeRound("Quarterfinals", allQF.slice(0, 2)));
+    leftHalf.appendChild(makeRound("Semifinals", allSF.slice(0, 1)));
+
+    const center = document.createElement("div");
+    center.className = "bracket-center";
+    const centerTitle = document.createElement("h3");
+    centerTitle.className = "bracket-round-title";
+    centerTitle.textContent = "Final";
+    center.appendChild(centerTitle);
+    const finalDiv = document.createElement("div");
+    finalDiv.className = "bracket-matches";
+    for (const m of allFinal) finalDiv.appendChild(renderBracketMatch(m, ko));
+    center.appendChild(finalDiv);
+
+    const rightHalf = document.createElement("div");
+    rightHalf.className = "bracket-half bracket-right";
+    rightHalf.appendChild(makeRound("Semifinals", allSF.slice(1)));
+    rightHalf.appendChild(makeRound("Quarterfinals", allQF.slice(2)));
+    rightHalf.appendChild(makeRound("Round of 16", allR16.slice(4)));
+    rightHalf.appendChild(makeRound("Round of 32", allR32.slice(8)));
+
+    grid.appendChild(leftHalf);
+    grid.appendChild(center);
+    grid.appendChild(rightHalf);
+    wrap.appendChild(grid);
+  } else {
+    const bracket = document.createElement("div");
+    bracket.className = "bracket";
+    for (const [label, matches] of [
+      ["Round of 32", allR32], ["Round of 16", allR16],
+      ["Quarterfinals", allQF], ["Semifinals", allSF], ["Final", allFinal],
+    ]) bracket.appendChild(makeRound(label, matches));
+    wrap.appendChild(bracket);
+  }
+
   els.bracketView.appendChild(wrap);
 
-  // Third-place match — shown below the main bracket
   const thirdMatch = FIXTURES.find(m => m.stage === "third");
   if (thirdMatch) {
     const thirdSection = document.createElement("div");
@@ -3070,32 +3120,79 @@ function renderPredictBracketSection() {
     <h2 class="predict-step-title"><span class="predict-step-num">3</span> Bracket</h2>
     <p class="predict-step-hint">Tap a team in each match to pick the winner. Picks propagate to the next round automatically.</p>
     ${champion ? `<div class="ko-banner champion-banner">🏆 <span class="flag">${flagFor(champion)}</span> <strong>${escapeHTML(champion)}</strong> — your predicted World Champion!</div>` : ""}
-    <div class="bracket-scroll">
-      <div class="bracket predict-bracket"></div>
+    <div class="bracket-layout-toggle">
+      <span class="bracket-layout-label">Layout:</span>
+      <button type="button" class="bracket-layout-btn${state.bracketLayout === "onesided" ? " active" : ""}" data-layout="onesided">One-sided</button>
+      <button type="button" class="bracket-layout-btn${state.bracketLayout === "twosided" ? " active" : ""}" data-layout="twosided">Two-sided</button>
     </div>
+    <div class="bracket-scroll"></div>
   `;
 
-  const bracket = section.querySelector(".bracket");
-  const rounds = [
-    { key: "r32", label: "Round of 32" },
-    { key: "r16", label: "Round of 16" },
-    { key: "qf", label: "Quarterfinals" },
-    { key: "sf", label: "Semifinals" },
-    { key: "final", label: "Final" },
-  ];
+  section.querySelectorAll(".bracket-layout-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      state.bracketLayout = btn.dataset.layout;
+      localStorage.setItem("wc26_bracketLayout", state.bracketLayout);
+      renderPredict();
+    });
+  });
 
-  for (const round of rounds) {
+  const scrollWrap = section.querySelector(".bracket-scroll");
+
+  const allR32   = getMatchesInBracketOrder("r32");
+  const allR16   = getMatchesInBracketOrder("r16");
+  const allQF    = getMatchesInBracketOrder("qf");
+  const allSF    = getMatchesInBracketOrder("sf");
+  const allFinal = getMatchesInBracketOrder("final");
+
+  function makeRound(label, matches) {
     const col = document.createElement("div");
     col.className = "bracket-round";
-    col.innerHTML = `<h3 class="bracket-round-title">${round.label}</h3>`;
+    col.innerHTML = `<h3 class="bracket-round-title">${label}</h3>`;
     const matchesDiv = document.createElement("div");
     matchesDiv.className = "bracket-matches";
-    const matches = getMatchesInBracketOrder(round.key);
-    for (const m of matches) {
-      matchesDiv.appendChild(renderPredictBracketMatch(m, predKo));
-    }
+    for (const m of matches) matchesDiv.appendChild(renderPredictBracketMatch(m, predKo));
     col.appendChild(matchesDiv);
-    bracket.appendChild(col);
+    return col;
+  }
+
+  if (state.bracketLayout === "twosided") {
+    const grid = document.createElement("div");
+    grid.className = "bracket-two-sided";
+
+    const leftHalf = document.createElement("div");
+    leftHalf.className = "bracket-half bracket-left";
+    leftHalf.appendChild(makeRound("Round of 32", allR32.slice(0, 8)));
+    leftHalf.appendChild(makeRound("Round of 16", allR16.slice(0, 4)));
+    leftHalf.appendChild(makeRound("Quarterfinals", allQF.slice(0, 2)));
+    leftHalf.appendChild(makeRound("Semifinals", allSF.slice(0, 1)));
+
+    const center = document.createElement("div");
+    center.className = "bracket-center";
+    center.innerHTML = `<h3 class="bracket-round-title">Final</h3>`;
+    const finalDiv = document.createElement("div");
+    finalDiv.className = "bracket-matches";
+    for (const m of allFinal) finalDiv.appendChild(renderPredictBracketMatch(m, predKo));
+    center.appendChild(finalDiv);
+
+    const rightHalf = document.createElement("div");
+    rightHalf.className = "bracket-half bracket-right";
+    rightHalf.appendChild(makeRound("Semifinals", allSF.slice(1)));
+    rightHalf.appendChild(makeRound("Quarterfinals", allQF.slice(2)));
+    rightHalf.appendChild(makeRound("Round of 16", allR16.slice(4)));
+    rightHalf.appendChild(makeRound("Round of 32", allR32.slice(8)));
+
+    grid.appendChild(leftHalf);
+    grid.appendChild(center);
+    grid.appendChild(rightHalf);
+    scrollWrap.appendChild(grid);
+  } else {
+    const bracket = document.createElement("div");
+    bracket.className = "bracket predict-bracket";
+    for (const [label, matches] of [
+      ["Round of 32", allR32], ["Round of 16", allR16],
+      ["Quarterfinals", allQF], ["Semifinals", allSF], ["Final", allFinal],
+    ]) bracket.appendChild(makeRound(label, matches));
+    scrollWrap.appendChild(bracket);
   }
 
   // Third-place match

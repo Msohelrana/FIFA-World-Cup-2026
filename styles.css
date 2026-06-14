@@ -1302,6 +1302,37 @@ body.is-admin .standings-table .pos { width: 56px; }
 .bracket-view {
   margin-top: 20px;
 }
+.bracket-layout-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.bracket-layout-label {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.bracket-layout-btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.bracket-layout-btn:hover {
+  background: var(--surface3);
+  color: var(--text);
+}
+.bracket-layout-btn.active {
+  background: rgba(76, 201, 240, 0.15);
+  border-color: rgba(76, 201, 240, 0.5);
+  color: var(--accent-2);
+}
 .bracket-scroll {
   overflow-x: auto;
   padding-bottom: 10px;
@@ -1312,11 +1343,44 @@ body.is-admin .standings-table .pos { width: 56px; }
   min-width: 1100px;
   align-items: stretch;
 }
+.bracket-two-sided {
+  display: flex;
+  align-items: stretch;
+  min-width: 1600px;
+  gap: 4px;
+}
+.bracket-half {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  align-items: stretch;
+}
+.bracket-center {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 0 6px;
+}
+.bracket-center .bracket-matches {
+  flex: 1;
+  justify-content: center;
+  min-height: unset;
+}
+.bracket-right .bracket-team,
+.bracket-right .predict-bracket-team {
+  flex-direction: row-reverse;
+}
+.bracket-right .bracket-team-name {
+  text-align: right;
+}
 .bracket-round {
   flex: 1;
   min-width: 200px;
   display: flex;
   flex-direction: column;
+}
+.bracket-two-sided .bracket-round {
+  min-width: 165px;
 }
 .bracket-round-title {
   text-align: center;
@@ -1338,6 +1402,10 @@ body.is-admin .standings-table .pos { width: 56px; }
   justify-content: space-around;
   gap: 8px;
   min-height: 720px;
+}
+.bracket-two-sided .bracket-matches {
+  gap: 6px;
+  min-height: 800px;
 }
 .bracket-match {
   background: var(--bg-card);
