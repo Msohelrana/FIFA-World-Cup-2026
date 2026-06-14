@@ -2068,22 +2068,26 @@ footer {
 .lb-view-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin-right: 6px;
-  padding: 0;
-  background: rgba(76, 201, 240, 0.12);
-  border: 1px solid rgba(76, 201, 240, 0.25);
-  border-radius: 6px;
+  gap: 4px;
+  margin-right: 7px;
+  padding: 3px 9px 3px 7px;
+  background: rgba(76, 201, 240, 0.10);
+  border: 1px solid rgba(76, 201, 240, 0.28);
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 13px;
-  line-height: 1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   color: var(--accent-2);
   vertical-align: middle;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.lb-view-btn:hover { background: rgba(76, 201, 240, 0.22); border-color: var(--accent-2); }
+.lb-view-btn svg { flex-shrink: 0; }
+.lb-view-btn:hover {
+  background: rgba(76, 201, 240, 0.2);
+  border-color: var(--accent-2);
+  color: #fff;
+}
 
 /* ---------- User predictions modal ---------- */
 .upred-modal {
