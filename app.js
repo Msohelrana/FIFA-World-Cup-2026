@@ -64,6 +64,7 @@ const state = {
   currentUser: null,             // {id, name, email} once logged in
   leaderboardUsers: [],          // [{userId, userName, picks, firstSubmittedAt}] for ranking
   showLeaderboard: false,        // Match Predict tab: hide leaderboard behind a toggle button
+  leaderboardLoaded: false,      // true once fetchAll() has been called (lazy)
   isAdmin: false,                // set by auth bootstrap once currentUser is known
 };
 
@@ -1751,10 +1752,16 @@ function renderPicks() {
     </div>
   `;
   view.appendChild(header);
-  header.querySelector("#picksLeaderboardBtn").addEventListener("click", () => {
+  header.querySelector("#picksLeaderboardBtn").addEventListener("click", async () => {
     state.showLeaderboard = !state.showLeaderboard;
+    if (state.showLeaderboard && !state.leaderboardLoaded && userPicksSync.available) {
+      renderPicks(); // render immediately with partial data (shows spinner/skeleton)
+      const all = await userPicksSync.fetchAll();
+      state.leaderboardUsers = all || [];
+      state.leaderboardLoaded = true;
+      userPicksSync.subscribe();
+    }
     renderPicks();
-    // Scroll into view if just opened, so user can see it without hunting
     if (state.showLeaderboard) {
       requestAnimationFrame(() => {
         const lb = view.querySelector(".picks-leaderboard-section");
@@ -3267,6 +3274,8 @@ async function logoutUser() {
   state.currentUser = null;
   state.matchPicks = {};           // clear picks so the next login doesn't inherit them
   saveMatchPicks();                // wipe localStorage too
+  state.leaderboardUsers = [];
+  state.leaderboardLoaded = false;
   setAdmin(false);                 // any admin powers go away with logout
   updateUserBtn();
   rerenderActive();                // re-render to drop admin-only controls
@@ -3279,10 +3288,15 @@ els.userBtn.addEventListener("click", () => {
 
 // First-login migration: push any local picks up so the user's account adopts them.
 async function afterLogin() {
-  // Fetch the user's existing server doc (if any) to merge with local
-  const all = await userPicksSync.fetchAll();
-  state.leaderboardUsers = all;
-  const ownServerRow = all.find(u => u.userId === state.currentUser.id);
+  // Only fetch own doc (1 read). Full leaderboard is lazy-loaded when first opened.
+  const ownServerRow = await userPicksSync.fetchOwn();
+  if (ownServerRow) {
+    // Keep own row in leaderboardUsers for self-scoring while leaderboard is unloaded
+    const idx = state.leaderboardUsers.findIndex(u => u.userId === state.currentUser.id);
+    if (idx >= 0) state.leaderboardUsers[idx] = ownServerRow;
+    else state.leaderboardUsers.push(ownServerRow);
+  }
+  state.leaderboardLoaded = false; // force reload on next leaderboard open
   const localCount = Object.keys(state.matchPicks).length;
   const serverCount = ownServerRow ? Object.keys(ownServerRow.picks).length : 0;
 
@@ -3737,6 +3751,7 @@ const userPicksSync = (() => {
     return {
       available: false,
       saveOwn: async () => {},
+      fetchOwn: async () => null,
       fetchAll: async () => [],
       subscribe: () => {},
     };
@@ -3841,6 +3856,30 @@ const userPicksSync = (() => {
     return all;
   }
 
+  // Reads only the logged-in user's own document (1 read instead of 100+).
+  // Sets knownOwnDocId so subsequent saveOwn() calls can update directly.
+  async function fetchOwn() {
+    if (!state.currentUser) return null;
+    try {
+      const uid = state.currentUser.id;
+      const page = await db.listDocuments(DB, COLL, [Query.equal("userId", uid), Query.limit(1)]);
+      if (!page.documents.length) return null;
+      const doc = page.documents[0];
+      knownOwnDocId = doc.$id;
+      if (doc.firstSubmittedAt) state.currentUser.firstSubmittedAt = doc.firstSubmittedAt;
+      return {
+        userId: doc.userId,
+        userName: doc.userName,
+        picks: decodeMatchPicks(doc.picks || ""),
+        firstSubmittedAt: doc.firstSubmittedAt || doc.$createdAt,
+        totalPicks: doc.totalPicks || 0,
+      };
+    } catch (err) {
+      console.warn("User picks fetchOwn failed:", err.message || err);
+      return null;
+    }
+  }
+
   function subscribe() {
     try {
       client.subscribe(`databases.${DB}.collections.${COLL}.documents`, (msg) => {
@@ -3869,7 +3908,7 @@ const userPicksSync = (() => {
     }
   }
 
-  return { available: true, saveOwn, fetchAll, subscribe };
+  return { available: true, saveOwn, fetchOwn, fetchAll, subscribe };
 })();
 
 // ===== Scoring engine =====
@@ -4042,29 +4081,24 @@ if (savedView && VALID_VIEWS.includes(savedView) && savedView !== "schedule") {
   render();
 }
 
-// Restore Appwrite auth session (if any) + bootstrap leaderboard data
+// Restore Appwrite auth session (if any) + hydrate own picks only.
+// Full leaderboard (fetchAll) is deferred until the user opens the leaderboard.
 if (appwriteAuth.available) {
-  appwriteAuth.getCurrent().then(user => {
+  appwriteAuth.getCurrent().then(async user => {
     if (user) {
       state.currentUser = user;
-      setAdmin(isUserAdmin(user));    // restore admin status from user identity
+      setAdmin(isUserAdmin(user));
       updateUserBtn();
-    }
-    return userPicksSync.fetchAll();
-  }).then(all => {
-    state.leaderboardUsers = all || [];
-    // If logged in, hydrate local matchPicks from server doc (overwrites local with server)
-    if (state.currentUser) {
-      const own = state.leaderboardUsers.find(u => u.userId === state.currentUser.id);
+      // 1 read instead of 100+ — only fetch the logged-in user's own doc
+      const own = await userPicksSync.fetchOwn();
       if (own) {
+        state.leaderboardUsers = [own];  // seed leaderboard with just self for scoring
         state.matchPicks = own.picks;
         saveMatchPicks();
       }
     }
-    // Re-render the active view in case admin restoration added new controls
     rerenderActive();
-    userPicksSync.subscribe();
-  }).catch(err => console.warn("Auth/leaderboard bootstrap failed:", err.message || err));
+  }).catch(err => console.warn("Auth bootstrap failed:", err.message || err));
 }
 
 // Shared prediction link handler: someone opened the site with #pred=… in the URL.
