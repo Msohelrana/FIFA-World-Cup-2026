@@ -3265,6 +3265,8 @@ async function logoutUser() {
   if (!ok) return;
   await appwriteAuth.logOut();
   state.currentUser = null;
+  state.matchPicks = {};           // clear picks so the next login doesn't inherit them
+  saveMatchPicks();                // wipe localStorage too
   setAdmin(false);                 // any admin powers go away with logout
   updateUserBtn();
   rerenderActive();                // re-render to drop admin-only controls
