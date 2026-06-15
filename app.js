@@ -4955,31 +4955,37 @@ if ("serviceWorker" in navigator && (location.protocol === "https:" || location.
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js")
       .then((reg) => {
-        // When a new SW is waiting, optionally let the user pick it up immediately
+        // Show "Update available" toast as soon as the new SW finishes installing.
+        // Only activate it (SKIP_WAITING) when the user clicks Refresh — avoids
+        // disrupting the page mid-session.
+        const showUpdateToast = (waitingSW) => {
+          if (document.querySelector(".update-toast")) return;
+          const t = document.createElement("div");
+          t.className = "update-toast";
+          t.innerHTML = `<span>✨ New version available</span><button type="button">Refresh</button>`;
+          t.querySelector("button").addEventListener("click", () => {
+            waitingSW.postMessage("SKIP_WAITING");
+            window.location.reload();
+          });
+          document.body.appendChild(t);
+        };
+
+        // New SW found while page is open
         reg.addEventListener("updatefound", () => {
           const newSW = reg.installing;
           if (!newSW) return;
           newSW.addEventListener("statechange", () => {
             if (newSW.state === "installed" && navigator.serviceWorker.controller) {
-              // A new version is available; activate it on next nav by telling it to skip waiting
-              newSW.postMessage("SKIP_WAITING");
+              showUpdateToast(newSW);
             }
           });
         });
+
+        // SW was already waiting when the page loaded (e.g. tab was open during deploy)
+        if (reg.waiting && navigator.serviceWorker.controller) {
+          showUpdateToast(reg.waiting);
+        }
       })
       .catch((err) => console.warn("Service worker registration failed:", err));
-
-    // When the active SW changes (new version took over), offer a refresh
-    // instead of yanking the page out from under the user.
-    let toastShown = false;
-    navigator.serviceWorker.addEventListener("controllerchange", () => {
-      if (toastShown) return;
-      toastShown = true;
-      const t = document.createElement("div");
-      t.className = "update-toast";
-      t.innerHTML = `<span>✨ New version available</span><button type="button">Refresh</button>`;
-      t.querySelector("button").addEventListener("click", () => window.location.reload());
-      document.body.appendChild(t);
-    });
   });
 }
