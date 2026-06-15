@@ -24,8 +24,7 @@ const OVERRIDE_KEY = "wc2026_standings_override";
 // Admin status is derived from the logged-in Appwrite user — only this account
 // can edit official results, standings overrides, and scorers. Other signed-in
 // users are regular viewers.
-const ADMIN_USER_ID = "6a291eea003080242282";
-function isUserAdmin(user) { return !!user && user.id === ADMIN_USER_ID; }
+function isUserAdmin(user) { return !!user && Array.isArray(user.labels) && user.labels.includes("admin"); }
 const PREDICTION_KEY = "wc2026_prediction";
 const MATCH_PICKS_KEY = "wc2026_match_picks";
 
@@ -4158,7 +4157,7 @@ const appwriteAuth = (() => {
   async function getCurrent() {
     try {
       const u = await account.get();
-      return { id: u.$id, name: u.name || u.email, email: u.email };
+      return { id: u.$id, name: u.name || u.email, email: u.email, labels: u.labels || [] };
     } catch { return null; }
   }
   async function signUp(email, password, name) {
