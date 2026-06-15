@@ -38,9 +38,10 @@ const liveScores = (() => {
     "Congo DR": "DR Congo",
   };
 
-  const POLL_LIVE_MS = 30 * 1000;        // something is in play
+  const POLL_LIVE_MS = 45 * 1000;        // match actively in play
+  const POLL_PAUSE_MS = 90 * 1000;       // all live matches in HT or ET break
   const POLL_IDLE_MS = 10 * 60 * 1000;   // nothing live right now
-  const TIMELINE_RECENT_MS = 48 * 36e5;  // fetch scorers for matches < 48h old
+  const TIMELINE_RECENT_MS = 4 * 36e5;   // fetch scorers for matches < 4h old
   const KICKOFF_TOLERANCE_MS = 90 * 60 * 1000;
 
   // app matchId → {score1, score2, pen1, pen2, scorers, cards, isLive, matchTime}
@@ -212,6 +213,10 @@ const liveScores = (() => {
   // 30s tick (or immediately when a score changes), reusing the last parse
   // in between. IdMatch → {scorers, cards}.
   const liveTL = new Map();
+  // matchId → { score1, score2, count } — tracks a score decrease that needs
+  // consecutive confirmation before being applied (guards against stale-data
+  // flicker while still allowing genuine VAR cancellations through).
+  const pendingScoreDown = new Map();
   let pollCount = 0;
 
   // One poll: calendar (cached), then timelines only for live matches +
@@ -224,7 +229,8 @@ const liveScores = (() => {
       ? calMatches
       : await fetchCalendar();
     const ko = getKnockoutAssignments();
-    let anyLive = false;
+    let anyActiveLive = false;
+    let anyPausedLive = false;
     let nextKickoff = Infinity;
     let cacheDirty = false;
 
@@ -260,13 +266,17 @@ const liveScores = (() => {
         if (kickoff > now) nextKickoff = Math.min(nextKickoff, kickoff);
         continue;
       }
-      if (isLive) anyLive = true;
+      if (isLive) {
+        if (isPaused) anyPausedLive = true;
+        else anyActiveLive = true;
+      }
 
       const hit = findFixture(fm, ko);
       if (!hit) continue;
       const { fixture, flipped } = hit;
 
       const lp = isLive ? phaseByMatch.get(fm.IdMatch) : null;
+      const isPaused = isLive && lp && (lp.period === 4 || lp.period === 7);
       let hs = fm.HomeTeamScore ?? (fm.Home && fm.Home.Score);
       let as_ = fm.AwayTeamScore ?? (fm.Away && fm.Away.Score);
       if (lp && lp.hs !== null && lp.hs !== undefined) hs = lp.hs;
@@ -290,6 +300,35 @@ const liveScores = (() => {
         rec.pen2 = flipped ? hp : ap;
       }
 
+      // Score-decrease guard: require 2 consecutive polls showing the same
+      // lower score before applying it. This filters stale-data flicker
+      // (alternating scores) while still passing through genuine VAR
+      // cancellations (which persist across polls).
+      if (isLive) {
+        const mid = matchId(fixture);
+        const prev = prevOverlay.get(mid);
+        if (prev && (rec.score1 < prev.score1 || rec.score2 < prev.score2)) {
+          const pend = pendingScoreDown.get(mid);
+          if (pend && pend.score1 === rec.score1 && pend.score2 === rec.score2) {
+            pend.count++;
+            if (pend.count < 2) {
+              // Not yet confirmed — hold the higher score for one more poll
+              rec.score1 = prev.score1;
+              rec.score2 = prev.score2;
+            } else {
+              pendingScoreDown.delete(mid); // confirmed VAR — apply and clear
+            }
+          } else {
+            // First poll showing a lower score — start confirmation window
+            pendingScoreDown.set(mid, { score1: rec.score1, score2: rec.score2, count: 1 });
+            rec.score1 = prev.score1;
+            rec.score2 = prev.score2;
+          }
+        } else {
+          pendingScoreDown.delete(mid); // score same or higher — clear any pending
+        }
+      }
+
       // Timeline data (scorers + cards): cached for finished matches,
       // refreshed every poll while live. Legacy cache entries (a bare scorers
       // array, pre-cards) are refetched while recent to pick up cards.
@@ -301,11 +340,11 @@ const liveScores = (() => {
       if (finished && cached && !Array.isArray(cached)) {
         if (cached.scorers && cached.scorers.length) rec.scorers = cached.scorers;
         if (cached.cards && cached.cards.length) rec.cards = cached.cards;
-      } else if (isLive && tl && !tlTick && !scoreChanged) {
-        // off-tick: reuse the last timeline parse
+      } else if (isLive && tl && (!tlTick && !scoreChanged || isPaused)) {
+        // off-tick or match paused (HT/ET break): reuse the last timeline parse
         if (tl.scorers.length) rec.scorers = tl.scorers;
         if (tl.cards.length) rec.cards = tl.cards;
-      } else if (isLive || (finished && now - kickoff < TIMELINE_RECENT_MS)) {
+      } else if (!isPaused && (isLive || (finished && now - kickoff < TIMELINE_RECENT_MS))) {
         const rt = resolveMatchTeams(fixture, ko);
         timelineJobs.push({
           fm, rec, finished,
@@ -346,7 +385,8 @@ const liveScores = (() => {
     // housekeeping after each poll (archiving finished results to Appwrite).
     if (onUpdate) onUpdate(changedIds);
 
-    if (anyLive) return POLL_LIVE_MS;
+    if (anyActiveLive) return POLL_LIVE_MS;
+    if (anyPausedLive) return POLL_PAUSE_MS;
     if (nextKickoff < Infinity) {
       // Sleep until just after the next kickoff, capped at the idle cadence
       return Math.max(POLL_LIVE_MS, Math.min(POLL_IDLE_MS, nextKickoff - now + 30e3));
