@@ -121,6 +121,31 @@ html, body {
   color: var(--text-dim);
   font-size: 15px;
 }
+.tournament-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+.tournament-progress-bar {
+  flex: 1;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.tournament-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--accent-2));
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+.tournament-progress-text {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
 
 /* ---------- Layout ---------- */
 .container {
@@ -857,7 +882,7 @@ html:has(body.modal-open) { overflow: hidden; overscroll-behavior: none; }
 }
 .stat-row {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr 100px 1fr;
   gap: 10px;
   align-items: center;
   padding: 5px 2px;
@@ -871,10 +896,31 @@ html:has(body.modal-open) { overflow: hidden; overscroll-behavior: none; }
 }
 .stat-row .stat-v:first-child { text-align: left; }
 .stat-row .stat-v:last-child { text-align: right; }
+.stat-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
 .stat-row .stat-label {
   color: var(--text-dim);
   font-size: 12px;
   text-align: center;
+}
+.stat-split-bar {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--accent-2);
+  overflow: hidden;
+  position: relative;
+}
+.stat-split-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--gold);
 }
 .stats-bookings {
   display: grid;
@@ -1924,7 +1970,8 @@ footer {
 .picks-lb-table .lb-name { text-align: left; font-weight: 600; }
 .picks-lb-table .lb-rank { width: 60px; color: var(--text-dim); font-weight: 700; }
 .picks-lb-table .lb-total { color: var(--gold); font-weight: 700; font-size: 14px; width: 60px; }
-.picks-lb-table .lb-exact, .picks-lb-table .lb-outcome, .picks-lb-table .lb-pk { width: 70px; color: var(--text-dim); }
+.picks-lb-table .lb-exact, .picks-lb-table .lb-outcome, .picks-lb-table .lb-pk, .picks-lb-table .lb-gd { width: 70px; color: var(--text-dim); }
+.picks-lb-table .lb-acc { width: 56px; color: var(--accent-2); font-size: 12px; }
 .picks-lb-table tr.lb-top td { background: rgba(255, 209, 102, 0.06); }
 .picks-lb-table tr.is-me td { background: rgba(76, 201, 240, 0.12); }
 .picks-lb-table tr { will-change: transform; }

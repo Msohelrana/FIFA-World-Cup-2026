@@ -374,6 +374,23 @@ function rerenderActive() {
   else if (state.view === "scorers") renderTopScorers();
   else if (state.view === "predict") renderPredict();
   else if (state.view === "picks") renderPicks();
+  updateProgressBar();
+}
+
+function updateProgressBar() {
+  const fill = document.getElementById("progressFill");
+  const text = document.getElementById("progressText");
+  if (!fill || !text) return;
+  const total = FIXTURES.length;
+  const done = FIXTURES.filter(m => {
+    const r = getResult(m);
+    if (!r || r.score1 === undefined) return false;
+    const live = typeof liveScores !== "undefined" && liveScores.get(matchId(m));
+    return !live || !live.isLive;
+  }).length;
+  const pct = total > 0 ? (done / total) * 100 : 0;
+  fill.style.width = pct + "%";
+  text.textContent = `${done} / ${total} matches played`;
 }
 
 function matchId(m) {
@@ -2516,6 +2533,7 @@ function renderPicksLeaderboard() {
         <td class="lb-outcome">${r.outcomeCount}</td>
         <td class="lb-gd">${r.gdCount}</td>
         <td class="lb-pk">${r.pkCount}</td>
+        <td class="lb-acc">${r.accPct !== null ? r.accPct + '%' : '–'}</td>
         ${bonusCell}
       </tr>`;
   }).join("");
@@ -2532,6 +2550,7 @@ function renderPicksLeaderboard() {
             <th class="lb-outcome" title="Correct outcomes (winner / draw)">Outcome</th>
             <th class="lb-gd" title="Correct goal difference">GD</th>
             <th class="lb-pk" title="Correct penalty winners">PK</th>
+            <th class="lb-acc" title="% of locked picks that scored any points">Acc%</th>
             <th class="lb-bonus" title="Admin-awarded bonus points">Bonus</th>
           </tr>
         </thead>
@@ -4452,6 +4471,8 @@ function computeUserLeaderboardRow(user) {
   let outcomeCount = 0;
   let gdCount = 0;
   let pkCount = 0;
+  let lockedCount = 0;
+  let correctCount = 0;
   for (const m of FIXTURES) {
     const pick = user.picks[matchId(m)];
     // Manual entry or FIFA API result — in-play scores count too, so
@@ -4459,12 +4480,15 @@ function computeUserLeaderboardRow(user) {
     const result = getResult(m);
     const s = scoreMatchPick(pick, result, m);
     if (!s) continue;
+    lockedCount++;
     total += s.awarded;
+    if (s.awarded > 0) correctCount++;
     if (s.exact) exactCount++;
     if (s.outcome) outcomeCount++;
     if (s.diff) gdCount++;
     if (s.pkBonus > 0) pkCount++;
   }
+  const accPct = lockedCount > 0 ? Math.round((correctCount / lockedCount) * 100) : null;
   const bonus = getUserBonus(user.userId);
   return {
     userId: user.userId,
@@ -4475,6 +4499,9 @@ function computeUserLeaderboardRow(user) {
     outcomeCount,
     gdCount,
     pkCount,
+    lockedCount,
+    correctCount,
+    accPct,
     firstSubmittedAt: user.firstSubmittedAt || "",
   };
 }
@@ -4552,6 +4579,7 @@ if (savedView && VALID_VIEWS.includes(savedView) && savedView !== "schedule") {
 } else {
   render();
 }
+updateProgressBar();
 
 // Restore Appwrite auth session (if any) + hydrate own picks only.
 // Full leaderboard (fetchAll) is deferred until the user opens the leaderboard.
@@ -4770,6 +4798,16 @@ function statValue(stats, key, kind) {
   return String(Math.round(v));
 }
 
+function statRaw(stats, key, kind) {
+  if (kind === "passPct") {
+    const p = stats.Passes, c = stats.PassesCompleted;
+    return (p > 0 && c !== undefined) ? c / p : null;
+  }
+  if (!key) return null;
+  const v = stats[key];
+  return (v !== undefined && v !== null) ? Number(v) : null;
+}
+
 function showMatchStats(m, t1, t2) {
   const modal = document.createElement("div");
   modal.className = "modal";
@@ -4818,13 +4856,20 @@ function showMatchStats(m, t1, t2) {
         const w = Math.round((p1 / (p1 + p2)) * 100);
         bar = `<div class="stat-bar"><span style="width:${w}%"></span></div>`;
       }
-      const rows = STAT_ROWS.map(([label, key, kind]) =>
-        `<div class="stat-row">
+      const rows = STAT_ROWS.map(([label, key, kind]) => {
+        const r1 = statRaw(stats.s1, key, kind);
+        const r2 = statRaw(stats.s2, key, kind);
+        let miniBar = "";
+        if (r1 !== null && r2 !== null && r1 + r2 > 0) {
+          const pct = Math.round((r1 / (r1 + r2)) * 100);
+          miniBar = `<div class="stat-split-bar"><div class="stat-split-left" style="width:${pct}%"></div></div>`;
+        }
+        return `<div class="stat-row">
           <span class="stat-v">${statValue(stats.s1, key, kind)}</span>
-          <span class="stat-label">${label}</span>
+          <div class="stat-center">${miniBar}<span class="stat-label">${label}</span></div>
           <span class="stat-v">${statValue(stats.s2, key, kind)}</span>
-        </div>`
-      ).join("");
+        </div>`;
+      }).join("");
       // Who got booked (from the timeline cards, when we have them) — split
       // into columns under each team's side, same orientation as the header
       const cards = getCards(m);
@@ -4891,6 +4936,7 @@ if (typeof liveScores !== "undefined") {
   liveScores.start((changedIds) => {
     const archived = archiveFinishedApiResults();
     if (!changedIds.length && !archived) return;
+    updateProgressBar();
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest(".result-row, .scorer-form")) return;
