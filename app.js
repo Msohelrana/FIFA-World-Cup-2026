@@ -6,6 +6,7 @@ const els = {
   tzSelect: document.getElementById("tzSelect"),
   clearBtn: document.getElementById("clearBtn"),
   userBtn: document.getElementById("userBtn"),
+  settingsBtn: document.getElementById("settingsBtn"),
   scheduleView: document.getElementById("scheduleView"),
   groupsView: document.getElementById("groupsView"),
   standingsView: document.getElementById("standingsView"),
@@ -3480,14 +3481,17 @@ els.tabs.forEach(t => {
 // ===== User auth UI =====
 function updateUserBtn() {
   if (!els.userBtn) return;
+  const label = els.userBtn.querySelector(".btn-label");
   if (state.currentUser) {
-    els.userBtn.textContent = `👤 ${state.currentUser.name}`;
+    if (label) label.textContent = ` ${state.currentUser.name}`;
     els.userBtn.classList.add("is-active");
     els.userBtn.title = "Click to sign out";
+    if (els.settingsBtn) els.settingsBtn.hidden = false;
   } else {
-    els.userBtn.textContent = "👤 Sign in";
+    if (label) label.textContent = " Sign in";
     els.userBtn.classList.remove("is-active");
     els.userBtn.title = "Sign in to join the prediction leaderboard";
+    if (els.settingsBtn) els.settingsBtn.hidden = true;
   }
 }
 
@@ -3595,6 +3599,107 @@ els.userBtn.addEventListener("click", () => {
   if (state.currentUser) logoutUser();
   else openAuthModal("signin");
 });
+if (els.settingsBtn) els.settingsBtn.addEventListener("click", openSettingsModal);
+
+function openSettingsModal() {
+  const existing = document.getElementById("settingsModal");
+  if (existing) existing.remove();
+
+  const u = state.currentUser;
+  const modal = document.createElement("div");
+  modal.id = "settingsModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-icon modal-icon-info">⚙️</div>
+      <h2>Account Settings</h2>
+      <p class="modal-subtitle"><strong>${escapeHTML(u.name)}</strong><br><span style="opacity:0.7;font-size:13px">${escapeHTML(u.email)}</span></p>
+      <div class="modal-actions" style="flex-direction:column;gap:10px">
+        <button id="settingsChangePw" class="modal-btn modal-btn-primary" type="button" style="width:100%">🔑 Change Password</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector("#settingsChangePw").addEventListener("click", () => { close(); openChangePasswordModal(); });
+}
+
+function openChangePasswordModal() {
+  const existing = document.getElementById("changePwModal");
+  if (existing) existing.remove();
+
+  const modal = document.createElement("div");
+  modal.id = "changePwModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true">
+      <div class="modal-icon modal-icon-info">🔑</div>
+      <h2>Change Password</h2>
+      <input type="password" id="cpwCurrent" class="modal-input" placeholder="Current password" autocomplete="current-password" style="margin-bottom:8px">
+      <input type="password" id="cpwNew" class="modal-input" placeholder="New password (min 8 chars)" autocomplete="new-password" style="margin-bottom:8px">
+      <input type="password" id="cpwConfirm" class="modal-input" placeholder="Confirm new password" autocomplete="new-password">
+      <p class="modal-error" id="cpwError" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="cpwCancel" class="modal-btn modal-btn-ghost" type="button">Cancel</button>
+        <button id="cpwSubmit" class="modal-btn modal-btn-primary" type="button">Update Password</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+
+  const err = modal.querySelector("#cpwError");
+  const submit = async () => {
+    err.textContent = "";
+    const current = modal.querySelector("#cpwCurrent").value;
+    const next = modal.querySelector("#cpwNew").value;
+    const confirm = modal.querySelector("#cpwConfirm").value;
+    if (!current || !next || !confirm) { err.textContent = "All fields are required."; return; }
+    if (next.length < 8) { err.textContent = "New password must be at least 8 characters."; return; }
+    if (next !== confirm) { err.textContent = "New passwords do not match."; return; }
+    const btn = modal.querySelector("#cpwSubmit");
+    btn.disabled = true;
+    btn.textContent = "Updating…";
+    try {
+      await appwriteAuth.updatePassword(next, current);
+      close();
+      showAlert("Your password has been updated.", { title: "Password changed", icon: "✅", iconType: "success" });
+    } catch (ex) {
+      err.textContent = (ex && ex.message) || "Failed to update password.";
+      btn.disabled = false;
+      btn.textContent = "Update Password";
+    }
+  };
+
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector("#cpwCancel").addEventListener("click", close);
+  modal.querySelector("#cpwSubmit").addEventListener("click", submit);
+  modal.querySelectorAll("input").forEach(el => el.addEventListener("keydown", e => {
+    if (e.key === "Enter") submit();
+    if (e.key === "Escape") close();
+  }));
+  setTimeout(() => modal.querySelector("#cpwCurrent").focus(), 60);
+}
 
 // First-login migration: push any local picks up so the user's account adopts them.
 async function afterLogin() {
@@ -4017,7 +4122,10 @@ const appwriteAuth = (() => {
   async function logOut() {
     try { await account.deleteSession("current"); } catch { /* ignore */ }
   }
-  return { available: true, getCurrent, signUp, logIn, logOut };
+  async function updatePassword(newPassword, oldPassword) {
+    await account.updatePassword(newPassword, oldPassword);
+  }
+  return { available: true, getCurrent, signUp, logIn, logOut, updatePassword };
 })();
 
 // ===== Compact picks encoding (fits 104 matches in < 1 KB) =====

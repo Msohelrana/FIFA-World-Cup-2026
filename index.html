@@ -20,7 +20,10 @@
 
 <body>
   <header class="hero">
-    <button id="userBtn" type="button" class="admin-btn hero-user-btn">👤 Sign in</button>
+    <div class="hero-btn-group">
+      <button id="settingsBtn" type="button" class="admin-btn hero-settings-btn" hidden>⚙️<span class="btn-label"> Settings</span></button>
+      <button id="userBtn" type="button" class="admin-btn hero-user-btn">👤<span class="btn-label"> Sign in</span></button>
+    </div>
     <div class="hero-inner">
       <div class="hero-flex">
         <img class="wc-logo" src="icon.png" alt="World Cup 2026 logo">
