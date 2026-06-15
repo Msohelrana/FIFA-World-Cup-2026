@@ -1033,6 +1033,7 @@ let _picksShowOldFinished = false;
 let _picksShowRecentFinished = false;
 let _picksShowUpcoming = false;
 const _prevLbRanks = new Map(); // userId → rank, persists between renders for animation
+let _lastMyExactCount = null;   // tracks own exact count to detect new exact scores
 
 function renderScheduleDayGroups(byDate, filterTeam, ko, container, desc = false) {
   const sortedDates = [...byDate.keys()].sort();
@@ -1996,6 +1997,18 @@ function renderPicks() {
 
   // Leaderboard renders inline only when toggled on
   if (state.showLeaderboard) {
+    // Detect a newly scored exact prediction and fire confetti
+    if (state.currentUser) {
+      const myEntry = state.leaderboardUsers.find(u => u.userId === state.currentUser.id);
+      if (myEntry) {
+        const myStats = computeUserLeaderboardRow(myEntry);
+        if (_lastMyExactCount !== null && myStats.exactCount > _lastMyExactCount) {
+          fireConfetti();
+        }
+        _lastMyExactCount = myStats.exactCount;
+      }
+    }
+
     const lb = renderPicksLeaderboard();
     view.appendChild(lb);
 
@@ -2499,6 +2512,55 @@ function openUserPredictionsModal(userId, userName) {
   modal.querySelector("#upredCloseBtn").addEventListener("click", close);
   modal.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
   setTimeout(() => modal.querySelector("#upredCloseBtn").focus(), 60);
+}
+
+function playExactScoreSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const resume = ctx.state === "suspended" ? ctx.resume() : Promise.resolve();
+    resume.then(() => {
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.35, ctx.currentTime);
+      master.connect(ctx.destination);
+      // Ascending C major arpeggio: C5 → E5 → G5 → C6
+      [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+        const t = ctx.currentTime + i * 0.11;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(master);
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.5, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        osc.start(t);
+        osc.stop(t + 0.45);
+      });
+      setTimeout(() => ctx.close(), 2000);
+    });
+  } catch (e) { /* audio unavailable — fail silently */ }
+}
+
+function fireConfetti() {
+  playExactScoreSound();
+  const COLORS = ["#ffd166", "#06d6a0", "#4cc9f0", "#ef476f", "#a855f7", "#f4a261"];
+  const container = document.createElement("div");
+  container.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9000;overflow:hidden;";
+  document.body.appendChild(container);
+  for (let i = 0; i < 90; i++) {
+    const el = document.createElement("div");
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const size = Math.random() * 7 + 4;
+    const isCircle = Math.random() < 0.3;
+    el.style.cssText = `position:absolute;width:${size}px;height:${isCircle ? size : size * 2.5}px;`
+      + `background:${color};border-radius:${isCircle ? "50%" : "2px"};`
+      + `left:${Math.random() * 100}%;top:-20px;`
+      + `--drift:${(Math.random() - 0.5) * 250}px;--rot:${Math.random() * 720 - 360}deg;`
+      + `animation:confetti-fall ${(Math.random() * 1.5 + 1.5).toFixed(2)}s ${(Math.random() * 0.4).toFixed(2)}s ease-in forwards;`;
+    container.appendChild(el);
+  }
+  setTimeout(() => container.remove(), 3500);
 }
 
 function lbAvatar(name) {

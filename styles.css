@@ -1655,6 +1655,60 @@ footer {
   text-align: center;
 }
 
+/* ---------- Bottom nav (mobile only) ---------- */
+.bottom-nav {
+  display: none;
+}
+@media (max-width: 640px) {
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    z-index: 200;
+    padding-bottom: env(safe-area-inset-bottom);
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .bottom-nav::-webkit-scrollbar { display: none; }
+  .bottom-nav .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    min-width: 54px;
+    padding: 6px 4px 8px;
+    background: transparent;
+    color: var(--text-dim);
+    border: none;
+    border-radius: 0;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    transition: color 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bottom-nav .tab.active {
+    color: var(--accent-2);
+    background: transparent;
+  }
+  .bottom-nav .tab svg {
+    transition: transform 0.15s;
+  }
+  .bottom-nav .tab.active svg {
+    transform: translateY(-1px);
+  }
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 600px) {
   /* Tighter hero on small phones */
@@ -1680,19 +1734,12 @@ footer {
   }
   #clearBtn { width: 100%; }
 
-  /* View toggle: wrap to 2 rows on mobile (4 + 3 layout for 7 tabs) */
-  .view-toggle {
-    width: 100%;
-    flex-wrap: wrap;
-    row-gap: 3px;
-  }
-  .tab {
-    flex: 1 1 23%;           /* ~4 per row; 7 tabs wrap as 4 + 3 */
-    min-width: 0;
-    padding: 9px 4px;
-    font-size: 11.5px;
-    white-space: nowrap;
-  }
+  /* Hide top tab bar — bottom nav takes over on mobile */
+  .view-toggle { display: none; }
+
+  /* Push content above the fixed bottom nav */
+  .container { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  footer { margin-bottom: calc(64px + env(safe-area-inset-bottom)); }
 
   /* Single-column match grid */
   .match-list { grid-template-columns: 1fr; }
@@ -2468,6 +2515,11 @@ footer {
 @keyframes live-pulse-border {
   0%, 100% { border-color: rgba(255, 60, 60, 0.35); }
   50%       { border-color: rgba(255, 60, 60, 0.65); }
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(100vh) translateX(var(--drift)) rotate(var(--rot)); opacity: 0; }
 }
 .live-now-header {
   background: rgba(255, 40, 40, 0.12) !important;
