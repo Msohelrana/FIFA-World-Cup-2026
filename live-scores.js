@@ -107,7 +107,7 @@ const liveScores = (() => {
     if (fm.PlaceHolderA && fm.PlaceHolderB) {
       for (const m of candidates) {
         if (placeholderCode(m.team1) === fm.PlaceHolderA &&
-            placeholderCode(m.team2) === fm.PlaceHolderB) {
+          placeholderCode(m.team2) === fm.PlaceHolderB) {
           return { fixture: m, flipped: false };
         }
       }
@@ -252,7 +252,7 @@ const liveScores = (() => {
       // A match the cached calendar thinks is live but the live feed no longer
       // lists has likely just finished — refresh the calendar for final data.
       if (now - calAt > POLL_LIVE_MS &&
-          matches.some((fm) => liveness(fm, now).isLive && !phaseByMatch.has(fm.IdMatch))) {
+        matches.some((fm) => liveness(fm, now).isLive && !phaseByMatch.has(fm.IdMatch))) {
         matches = await fetchCalendar();
       }
     }
@@ -266,6 +266,8 @@ const liveScores = (() => {
         if (kickoff > now) nextKickoff = Math.min(nextKickoff, kickoff);
         continue;
       }
+      const lp = isLive ? phaseByMatch.get(fm.IdMatch) : null;
+      const isPaused = isLive && lp && (lp.period === 4 || lp.period === 7);
       if (isLive) {
         if (isPaused) anyPausedLive = true;
         else anyActiveLive = true;
@@ -275,8 +277,7 @@ const liveScores = (() => {
       if (!hit) continue;
       const { fixture, flipped } = hit;
 
-      const lp = isLive ? phaseByMatch.get(fm.IdMatch) : null;
-      const isPaused = isLive && lp && (lp.period === 4 || lp.period === 7);
+
       let hs = fm.HomeTeamScore ?? (fm.Home && fm.Home.Score);
       let as_ = fm.AwayTeamScore ?? (fm.Away && fm.Away.Score);
       if (lp && lp.hs !== null && lp.hs !== undefined) hs = lp.hs;
