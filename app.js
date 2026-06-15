@@ -2501,6 +2501,17 @@ function openUserPredictionsModal(userId, userName) {
   setTimeout(() => modal.querySelector("#upredCloseBtn").focus(), 60);
 }
 
+function lbAvatar(name) {
+  const words = name.trim().split(/\s+/);
+  const initials = words.length >= 2
+    ? (words[0][0] + words[words.length - 1][0]).toUpperCase()
+    : name.slice(0, 2).toUpperCase();
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffffff;
+  const hue = Math.abs(hash) % 360;
+  return `<span class="lb-avatar" style="--av-hue:${hue}" aria-hidden="true">${escapeHTML(initials)}</span>`;
+}
+
 function renderPicksLeaderboard() {
   const wrap = document.createElement("section");
   wrap.className = "picks-leaderboard-section";
@@ -2516,6 +2527,7 @@ function renderPicksLeaderboard() {
   const tbody = rows.slice(0, 20).map(r => {
     const medal = r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : "";
     const isMe = myId === r.userId;
+    const rankClass = r.rank === 1 ? "lb-rank-1" : r.rank === 2 ? "lb-rank-2" : r.rank === 3 ? "lb-rank-3" : "";
     const bonusCell = state.isAdmin
       ? `<td class="lb-bonus"><input type="number" min="0" max="99" class="score-input lb-bonus-input" data-uid="${escapeHTML(r.userId)}" value="${r.bonus || ""}" placeholder="–" aria-label="Bonus points for ${escapeHTML(r.userName)}"></td>`
       : `<td class="lb-bonus">${r.bonus ? "+" + r.bonus : "–"}</td>`;
@@ -2525,9 +2537,9 @@ function renderPicksLeaderboard() {
       : prevRank > r.rank ? ' <span class="lb-arrow lb-arrow-up">▲</span>'
       : ' <span class="lb-arrow lb-arrow-down">▼</span>';
     return `
-      <tr class="${isMe ? "is-me" : ""} ${r.rank <= 3 ? "lb-top" : ""}" data-uid="${escapeHTML(r.userId)}">
+      <tr class="${isMe ? "is-me" : ""} ${rankClass}" data-uid="${escapeHTML(r.userId)}">
         <td class="lb-rank">${medal} ${r.rank}${rankArrow}</td>
-        <td class="lb-name">${viewBtn}${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</td>
+        <td class="lb-name">${viewBtn}${lbAvatar(r.userName)}${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</td>
         <td class="lb-total">${r.total}</td>
         <td class="lb-exact">${r.exactCount}</td>
         <td class="lb-outcome">${r.outcomeCount}</td>
