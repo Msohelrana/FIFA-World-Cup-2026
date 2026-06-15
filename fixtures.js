@@ -40,10 +40,10 @@ const FIXTURES = [
   { stage: "group", group: "F", date: "2026-06-14", time: "22:00 ET", team1: "Sweden", team2: "Tunisia", venue: "Guadalupe, Mexico" },
 
   // June 15
-  { stage: "group", group: "H", date: "2026-06-15", time: "13:00 ET", team1: "Spain", team2: "Cape Verde", venue: "Atlanta" },
-  { stage: "group", group: "G", date: "2026-06-15", time: "18:00 ET", team1: "Belgium", team2: "Egypt", venue: "Seattle" },
+  { stage: "group", group: "H", date: "2026-06-15", time: "12:00 ET", team1: "Spain", team2: "Cape Verde", venue: "Atlanta" },
+  { stage: "group", group: "G", date: "2026-06-15", time: "15:00 ET", team1: "Belgium", team2: "Egypt", venue: "Seattle" },
   { stage: "group", group: "H", date: "2026-06-15", time: "18:00 ET", team1: "Saudi Arabia", team2: "Uruguay", venue: "Miami Gardens, FL" },
-  { stage: "group", group: "G", date: "2026-06-16", time: "00:00 ET", team1: "Iran", team2: "New Zealand", venue: "Inglewood, CA" },
+  { stage: "group", group: "G", date: "2026-06-15", time: "21:00 ET", team1: "Iran", team2: "New Zealand", venue: "Inglewood, CA" },
 
   // June 16
   { stage: "group", group: "I", date: "2026-06-16", time: "15:00 ET", team1: "France", team2: "Senegal", venue: "East Rutherford, NJ" },

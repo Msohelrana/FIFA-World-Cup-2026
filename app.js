@@ -1010,13 +1010,17 @@ function wireScoreInputs(card, m, t1, t2, teamsKnown) {
 }
 
 let _showOldFinished = false;
+let _showRecentFinished = false;
+let _showUpcoming = false;
 let _picksShowOldFinished = false;
 
-function renderScheduleDayGroups(byDate, filterTeam, ko, container) {
+function renderScheduleDayGroups(byDate, filterTeam, ko, container, desc = false) {
   const sortedDates = [...byDate.keys()].sort();
+  if (desc) sortedDates.reverse();
   for (const key of sortedDates) {
     const dayMatches = byDate.get(key);
     dayMatches.sort((a, b) => fixtureToUTC(a).getTime() - fixtureToUTC(b).getTime());
+    if (desc) dayMatches.reverse();
     const dayGroup = document.createElement("div");
     dayGroup.className = "day-group";
     const count = dayMatches.length;
@@ -1166,19 +1170,62 @@ function renderSchedule(filterTeam, filterDate) {
   if (recentByDate.size > 0) {
     const totalRecent = [...recentByDate.values()].reduce((s, a) => s + a.length, 0);
     const sec = document.createElement("div");
-    sec.className = "schedule-section";
-    sec.innerHTML = `<div class="schedule-section-header recent-header"><span class="schedule-section-title recent-title">✅ Recently Finished</span><span class="schedule-section-count">${totalRecent} ${totalRecent === 1 ? "match" : "matches"}</span></div>`;
+    sec.className = "schedule-section schedule-section-archived";
+
+    const recentToggleBtn = document.createElement("button");
+    recentToggleBtn.type = "button";
+    recentToggleBtn.className = "schedule-archive-toggle recent-toggle";
+    recentToggleBtn.innerHTML = _showRecentFinished
+      ? `✅ Recently Finished <span class="archive-badge recent-badge">${totalRecent}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+      : `✅ Recently Finished <span class="archive-badge recent-badge">${totalRecent}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
+    sec.appendChild(recentToggleBtn);
+
+    const recentBody = document.createElement("div");
+    recentBody.className = "schedule-archive-body";
+    recentBody.style.display = _showRecentFinished ? "" : "none";
+    renderScheduleDayGroups(recentByDate, filterTeam, ko, recentBody, true);
+    sec.appendChild(recentBody);
+
+    recentToggleBtn.addEventListener("click", () => {
+      _showRecentFinished = !_showRecentFinished;
+      recentBody.style.display = _showRecentFinished ? "" : "none";
+      recentToggleBtn.innerHTML = _showRecentFinished
+        ? `✅ Recently Finished <span class="archive-badge recent-badge">${totalRecent}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+        : `✅ Recently Finished <span class="archive-badge recent-badge">${totalRecent}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
+    });
+
     els.scheduleView.appendChild(sec);
-    renderScheduleDayGroups(recentByDate, filterTeam, ko, els.scheduleView);
   }
 
   // ── Section: Upcoming ─────────────────────────────────────────────────────
   if (upcomingByDate.size > 0) {
+    const totalUpcoming = [...upcomingByDate.values()].reduce((s, a) => s + a.length, 0);
     const sec = document.createElement("div");
-    sec.className = "schedule-section";
-    sec.innerHTML = `<div class="schedule-section-header upcoming-header"><span class="schedule-section-title upcoming-title">📅 Upcoming</span></div>`;
+    sec.className = "schedule-section schedule-section-archived";
+
+    const upcomingToggleBtn = document.createElement("button");
+    upcomingToggleBtn.type = "button";
+    upcomingToggleBtn.className = "schedule-archive-toggle upcoming-toggle";
+    upcomingToggleBtn.innerHTML = _showUpcoming
+      ? `📅 Upcoming <span class="archive-badge upcoming-badge">${totalUpcoming}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+      : `📅 Upcoming <span class="archive-badge upcoming-badge">${totalUpcoming}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
+    sec.appendChild(upcomingToggleBtn);
+
+    const upcomingBody = document.createElement("div");
+    upcomingBody.className = "schedule-archive-body";
+    upcomingBody.style.display = _showUpcoming ? "" : "none";
+    renderScheduleDayGroups(upcomingByDate, filterTeam, ko, upcomingBody);
+    sec.appendChild(upcomingBody);
+
+    upcomingToggleBtn.addEventListener("click", () => {
+      _showUpcoming = !_showUpcoming;
+      upcomingBody.style.display = _showUpcoming ? "" : "none";
+      upcomingToggleBtn.innerHTML = _showUpcoming
+        ? `📅 Upcoming <span class="archive-badge upcoming-badge">${totalUpcoming}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+        : `📅 Upcoming <span class="archive-badge upcoming-badge">${totalUpcoming}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
+    });
+
     els.scheduleView.appendChild(sec);
-    renderScheduleDayGroups(upcomingByDate, filterTeam, ko, els.scheduleView);
   }
 }
 
