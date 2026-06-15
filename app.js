@@ -2476,6 +2476,7 @@ function renderPicksLeaderboard() {
         <td class="lb-total">${r.total}</td>
         <td class="lb-exact">${r.exactCount}</td>
         <td class="lb-outcome">${r.outcomeCount}</td>
+        <td class="lb-gd">${r.gdCount}</td>
         <td class="lb-pk">${r.pkCount}</td>
         ${bonusCell}
       </tr>`;
@@ -2491,6 +2492,7 @@ function renderPicksLeaderboard() {
             <th class="lb-total" title="Total points">Pts</th>
             <th class="lb-exact" title="Exact-score predictions">Exact</th>
             <th class="lb-outcome" title="Correct outcomes (winner / draw)">Outcome</th>
+            <th class="lb-gd" title="Correct goal difference">GD</th>
             <th class="lb-pk" title="Correct penalty winners">PK</th>
             <th class="lb-bonus" title="Admin-awarded bonus points">Bonus</th>
           </tr>
@@ -4290,6 +4292,7 @@ function computeUserLeaderboardRow(user) {
   let total = 0;
   let exactCount = 0;
   let outcomeCount = 0;
+  let gdCount = 0;
   let pkCount = 0;
   for (const m of FIXTURES) {
     const pick = user.picks[matchId(m)];
@@ -4301,6 +4304,7 @@ function computeUserLeaderboardRow(user) {
     total += s.awarded;
     if (s.exact) exactCount++;
     if (s.outcome) outcomeCount++;
+    if (s.diff) gdCount++;
     if (s.pkBonus > 0) pkCount++;
   }
   const bonus = getUserBonus(user.userId);
@@ -4311,6 +4315,7 @@ function computeUserLeaderboardRow(user) {
     bonus,
     exactCount,
     outcomeCount,
+    gdCount,
     pkCount,
     firstSubmittedAt: user.firstSubmittedAt || "",
   };
@@ -4322,6 +4327,7 @@ function computeLeaderboard() {
     b.total - a.total
     || b.exactCount - a.exactCount
     || b.outcomeCount - a.outcomeCount
+    || b.gdCount - a.gdCount
     || b.pkCount - a.pkCount
     || (a.firstSubmittedAt || "").localeCompare(b.firstSubmittedAt || "")
     || a.userName.localeCompare(b.userName)
@@ -4330,7 +4336,7 @@ function computeLeaderboard() {
   let lastKey = null;
   let lastRank = 0;
   rows.forEach((r, i) => {
-    const key = `${r.total}|${r.exactCount}|${r.outcomeCount}|${r.pkCount}`;
+    const key = `${r.total}|${r.exactCount}|${r.outcomeCount}|${r.gdCount}|${r.pkCount}`;
     if (key !== lastKey) { lastRank = i + 1; lastKey = key; }
     r.rank = lastRank;
   });
