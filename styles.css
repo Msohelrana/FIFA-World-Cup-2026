@@ -1927,6 +1927,10 @@ footer {
 .picks-lb-table .lb-exact, .picks-lb-table .lb-outcome, .picks-lb-table .lb-pk { width: 70px; color: var(--text-dim); }
 .picks-lb-table tr.lb-top td { background: rgba(255, 209, 102, 0.06); }
 .picks-lb-table tr.is-me td { background: rgba(76, 201, 240, 0.12); }
+.picks-lb-table tr { will-change: transform; }
+.lb-arrow { font-size: 9px; margin-left: 4px; font-weight: 700; }
+.lb-arrow-up   { color: #2ecc71; }
+.lb-arrow-down { color: #e74c3c; }
 .lb-you {
   display: inline-block;
   margin-left: 6px;

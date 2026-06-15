@@ -1016,6 +1016,7 @@ let _showUpcoming = false;
 let _picksShowOldFinished = false;
 let _picksShowRecentFinished = false;
 let _picksShowUpcoming = false;
+const _prevLbRanks = new Map(); // userId → rank, persists between renders for animation
 
 function renderScheduleDayGroups(byDate, filterTeam, ko, container, desc = false) {
   const sortedDates = [...byDate.keys()].sort();
@@ -1891,6 +1892,13 @@ function pickResultLabel(m, pick, t1, t2) {
 
 function renderPicks() {
   const view = els.picksView;
+
+  // FLIP step 1 — record current row positions before wiping the DOM
+  const lbFirstPos = new Map();
+  view.querySelectorAll("tr[data-uid]").forEach(tr => {
+    lbFirstPos.set(tr.dataset.uid, tr.getBoundingClientRect().top);
+  });
+
   view.innerHTML = "";
 
   // Sign-in banner (only when not logged in) — non-blocking; local picks still work
@@ -1971,7 +1979,33 @@ function renderPicks() {
   });
 
   // Leaderboard renders inline only when toggled on
-  if (state.showLeaderboard) view.appendChild(renderPicksLeaderboard());
+  if (state.showLeaderboard) {
+    const lb = renderPicksLeaderboard();
+    view.appendChild(lb);
+
+    // FLIP steps 2-4 — animate rows from their old positions to their new ones
+    if (lbFirstPos.size > 0) {
+      requestAnimationFrame(() => {
+        lb.querySelectorAll("tr[data-uid]").forEach(tr => {
+          const first = lbFirstPos.get(tr.dataset.uid);
+          if (first === undefined) return;
+          const last = tr.getBoundingClientRect().top;
+          const delta = first - last;
+          if (Math.abs(delta) < 1) return;
+          tr.style.transition = "none";
+          tr.style.transform = `translateY(${delta}px)`;
+          requestAnimationFrame(() => {
+            tr.style.transition = "transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+            tr.style.transform = "";
+            tr.addEventListener("transitionend", () => {
+              tr.style.transition = "";
+              tr.style.transform = "";
+            }, { once: true });
+          });
+        });
+      });
+    }
+  }
 
   // Bucket matches into three sections
   const tz = state.selectedTz;
@@ -2470,9 +2504,13 @@ function renderPicksLeaderboard() {
       ? `<td class="lb-bonus"><input type="number" min="0" max="99" class="score-input lb-bonus-input" data-uid="${escapeHTML(r.userId)}" value="${r.bonus || ""}" placeholder="–" aria-label="Bonus points for ${escapeHTML(r.userName)}"></td>`
       : `<td class="lb-bonus">${r.bonus ? "+" + r.bonus : "–"}</td>`;
     const viewBtn = `<button class="lb-view-btn" data-uid="${escapeHTML(r.userId)}" data-name="${escapeHTML(r.userName)}" title="View ${escapeHTML(r.userName)}'s predictions" aria-label="View ${escapeHTML(r.userName)}'s predictions"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> View</button>`;
+    const prevRank = _prevLbRanks.get(r.userId);
+    const rankArrow = prevRank === undefined || prevRank === r.rank ? ""
+      : prevRank > r.rank ? ' <span class="lb-arrow lb-arrow-up">▲</span>'
+      : ' <span class="lb-arrow lb-arrow-down">▼</span>';
     return `
-      <tr class="${isMe ? "is-me" : ""} ${r.rank <= 3 ? "lb-top" : ""}">
-        <td class="lb-rank">${medal} ${r.rank}</td>
+      <tr class="${isMe ? "is-me" : ""} ${r.rank <= 3 ? "lb-top" : ""}" data-uid="${escapeHTML(r.userId)}">
+        <td class="lb-rank">${medal} ${r.rank}${rankArrow}</td>
         <td class="lb-name">${viewBtn}${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</td>
         <td class="lb-total">${r.total}</td>
         <td class="lb-exact">${r.exactCount}</td>
@@ -2502,6 +2540,19 @@ function renderPicksLeaderboard() {
       </table>
     </div>
   `;
+  // Animate rows whose rank changed since last render
+  wrap.querySelectorAll("tr[data-uid]").forEach(tr => {
+    const uid = tr.dataset.uid;
+    const row = rows.find(r => r.userId === uid);
+    if (!row) return;
+    const prev = _prevLbRanks.get(uid);
+    if (prev !== undefined && prev !== row.rank) {
+      tr.classList.add(row.rank < prev ? "lb-rank-up" : "lb-rank-down");
+    }
+  });
+  // Update stored ranks for next render
+  rows.forEach(r => _prevLbRanks.set(r.userId, r.rank));
+
   // Admin: saving a bonus re-sorts the board, so re-render on change (blur/Enter)
   wrap.querySelectorAll(".lb-bonus-input").forEach(inp => {
     inp.addEventListener("change", () => {
