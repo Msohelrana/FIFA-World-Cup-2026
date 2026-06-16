@@ -2896,6 +2896,7 @@ function renderTopScorers() {
   });
 
   const totalGoals = rows.reduce((s, r) => s + r.goals, 0);
+  const goldenBoot = renderGoldenBootCard(rows);
 
   const tbody = rows.map(r => {
     const flag = flagFor(r.team);
@@ -2911,6 +2912,7 @@ function renderTopScorers() {
   }).join("");
 
   view.innerHTML = `
+    ${goldenBoot}
     <div class="ts-intro">
       <p>Goals scored across all matches. Updates automatically as the admin adds scorers.</p>
       <p class="ts-summary"><strong>${rows.length}</strong> scorer${rows.length === 1 ? "" : "s"} · <strong>${totalGoals}</strong> goal${totalGoals === 1 ? "" : "s"}</p>
@@ -2928,6 +2930,39 @@ function renderTopScorers() {
         </thead>
         <tbody>${tbody}</tbody>
       </table>
+    </div>
+  `;
+}
+
+// Golden Boot = the tournament's top goalscorer. FIFA breaks ties by assists,
+// then fewest minutes played — neither is available from the public feed, so we
+// show every player level on the top goal count as co-leaders and say why.
+function renderGoldenBootCard(rows) {
+  if (!rows.length || rows[0].goals === 0) return "";
+  const topGoals = rows[0].goals;
+  const leaders = rows.filter(r => r.goals === topGoals);
+  const tied = leaders.length > 1;
+
+  const leaderHTML = leaders.map(r => `
+    <span class="gb-leader">
+      <span class="flag">${flagFor(r.team)}</span>
+      <span class="gb-name">${escapeHTML(r.name)}</span>
+      <span class="gb-team">${escapeHTML(r.team)}</span>
+    </span>`).join(tied ? `<span class="gb-amp">&amp;</span>` : "");
+
+  const note = tied
+    ? `<p class="gb-note">${leaders.length} players tied on ${topGoals}. FIFA breaks ties by assists, then fewest minutes played — not available from public data, so co-leaders are shown.</p>`
+    : `<p class="gb-note">Provisional — leads on goals. FIFA breaks ties by assists, then fewest minutes played.</p>`;
+
+  return `
+    <div class="golden-boot-card${tied ? " is-tied" : ""}">
+      <div class="gb-trophy" aria-hidden="true">🥇</div>
+      <div class="gb-body">
+        <div class="gb-label">Golden Boot · current ${tied ? "co-leaders" : "leader"}</div>
+        <div class="gb-leaders">${leaderHTML}</div>
+        <div class="gb-goals"><strong>${topGoals}</strong> goal${topGoals === 1 ? "" : "s"}</div>
+        ${note}
+      </div>
     </div>
   `;
 }
