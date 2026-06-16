@@ -1183,8 +1183,8 @@ function renderSchedule(filterTeam, filterDate) {
       _showOldFinished = !_showOldFinished;
       archiveBody.style.display = _showOldFinished ? "" : "none";
       toggleBtn.innerHTML = _showOldFinished
-        ? `🏁 Previous Results <span class="archive-badge">${totalOld}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▼</span>`
-        : `🏁 Previous Results <span class="archive-badge">${totalOld}</span><span class="archive-chevron" style="margin-left:auto">Show ▶</span>`;
+        ? `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron open" style="margin-left:auto">Hide ▲</span>`
+        : `🕘 Older Matches <span class="archive-badge">${totalOld}</span><span class="archive-chevron" style="margin-left:auto">Show ▼</span>`;
     });
 
     els.scheduleView.appendChild(sec);
@@ -4737,6 +4737,46 @@ if (savedView && VALID_VIEWS.includes(savedView) && savedView !== "schedule") {
 }
 updateProgressBar();
 
+// Mobile sidebar navigation
+(function () {
+  const sidebar = document.getElementById("mobileSidebar");
+  const overlay = document.getElementById("sidebarOverlay");
+  const menuBtn = document.getElementById("menuBtn");
+  const closeBtn = document.getElementById("sidebarCloseBtn");
+  if (!sidebar || !overlay || !menuBtn) return;
+
+  function openSidebar() {
+    sidebar.classList.add("open");
+    overlay.classList.add("open");
+    sidebar.setAttribute("aria-hidden", "false");
+    menuBtn.setAttribute("aria-expanded", "true");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeSidebar() {
+    sidebar.classList.remove("open");
+    overlay.classList.remove("open");
+    sidebar.setAttribute("aria-hidden", "true");
+    menuBtn.setAttribute("aria-expanded", "false");
+    document.body.style.overflow = "";
+  }
+
+  menuBtn.addEventListener("click", openSidebar);
+  if (closeBtn) closeBtn.addEventListener("click", closeSidebar);
+  overlay.addEventListener("click", closeSidebar);
+
+  // Close on Escape key
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && sidebar.classList.contains("open")) closeSidebar();
+  });
+
+  // Close sidebar when a tab is picked (delegated to sidebar)
+  sidebar.addEventListener("click", e => {
+    const tab = e.target.closest(".tab[data-view]");
+    if (tab) closeSidebar();
+  });
+})();
+
 // Restore Appwrite auth session (if any) + hydrate own picks only.
 // Full leaderboard (fetchAll) is deferred until the user opens the leaderboard.
 if (appwriteAuth.available) {
@@ -4880,7 +4920,6 @@ if (appwriteSync.available) {
 
     // Case 1: Appwrite empty + local has data → first ever run, seed Appwrite
     if (!remoteHasData && localHasData) {
-      console.log(`Seeding Appwrite from local cache: ${Object.keys(state.results).length} results, ${Object.keys(state.standingsOverride).length} overrides.`);
       for (const matchId of Object.keys(state.results)) appwriteSync.scheduleMatch(matchId);
       for (const letter of Object.keys(state.standingsOverride)) appwriteSync.scheduleStandings(letter);
       return;
@@ -4895,12 +4934,10 @@ if (appwriteSync.available) {
     // Case 3: cached snapshot is fresh → skip the expensive bootstrap
     const localVersion = getCacheVersion();
     if (!isCacheStale(localVersion, remote)) {
-      console.log("Cache is fresh — using local data, no full fetch needed.");
       return;
     }
 
     // Case 4: cache is stale or missing → do a full bootstrap
-    console.log("Cache stale, fetching latest from Appwrite...");
     const data = await appwriteSync.bootstrap();
     if (data) {
       state.results = data.results;
@@ -5082,7 +5119,6 @@ function archiveFinishedApiResults() {
   }
   if (archived) {
     saveResults();
-    console.log(`Live scores: archived ${archived} final result(s) to Appwrite.`);
   }
   return archived;
 }
