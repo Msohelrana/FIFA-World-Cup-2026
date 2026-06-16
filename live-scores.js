@@ -60,6 +60,12 @@ const liveScores = (() => {
   let timer = null;
   let lastById = new Map(); // matchId → serialized rec, for change detection
 
+  // FIFA's official group standing position (1-4 within each group), keyed by
+  // local team name. Used only as the last-resort standings tiebreaker: it
+  // resolves "drawing of lots" ties the app can't compute and backstops the
+  // fair-play tiebreaker when a finished match's card timeline isn't loaded.
+  let standingPos = new Map();
+
   const localName = (n) => TEAM_ALIASES[n] || n;
 
   function sideName(side) {
@@ -206,7 +212,26 @@ const liveScores = (() => {
     );
     calMatches = data.Results || [];
     calAt = Date.now();
+    // Refresh the official group standings on the same cadence (and whenever a
+    // finished match forces a calendar refetch). Optional — failure leaves the
+    // app on its own computed order.
+    const groupMatch = calMatches.find((m) => m.GroupName && m.GroupName.length && m.IdStage);
+    if (groupMatch) {
+      try { await fetchStandings(groupMatch.IdStage); } catch { /* tiebreaker is optional */ }
+    }
     return calMatches;
+  }
+
+  async function fetchStandings(stageId) {
+    const d = await fetchJSON(
+      `${API}/calendar/${ID_COMPETITION}/${ID_SEASON}/${stageId}/standing?language=en`
+    );
+    const next = new Map();
+    for (const r of d.Results || []) {
+      const desc = r.Team && Array.isArray(r.Team.Name) && r.Team.Name[0] && r.Team.Name[0].Description;
+      if (desc && r.Position) next.set(localName(desc), r.Position);
+    }
+    if (next.size) standingPos = next; // keep the last good map if a poll returns empty
   }
 
   // Live timelines are heavier than scores: refetch them only every other
@@ -442,6 +467,8 @@ const liveScores = (() => {
 
   return {
     get(id) { return overlay.get(id) || null; },
+    // FIFA's official within-group position for a team, or null if unknown.
+    officialPosition(team) { return standingPos.get(team) || null; },
     getStats,
     start(updateCb) {
       onUpdate = updateCb;

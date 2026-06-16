@@ -1479,6 +1479,19 @@ function computeStandings(groupLetter) {
 
   for (const t in stats) stats[t].gd = stats[t].gf - stats[t].ga;
 
+  // Last-resort tiebreaker for teams the app can't separate (FIFA's "drawing of
+  // lots", plus a backstop for fair-play when a finished match's cards aren't
+  // loaded): use FIFA's official published position, falling back to
+  // alphabetical when the live standings feed is unavailable.
+  const officialPos = (team) =>
+    (typeof liveScores !== "undefined" && liveScores.officialPosition)
+      ? liveScores.officialPosition(team) : null;
+  const finalTieBreak = (x, y) => {
+    const px = officialPos(x.team), py = officialPos(y.team);
+    if (px !== null && py !== null && px !== py) return px - py;
+    return x.team.localeCompare(y.team);
+  };
+
   // If the group has no entered results, show all teams alphabetically with zeros.
   const groupHasAnyResult = Object.values(stats).some(s => s.played > 0);
   const sorted = groupHasAnyResult
@@ -1486,7 +1499,7 @@ function computeStandings(groupLetter) {
       y.points - x.points ||
       y.gd - x.gd ||
       y.gf - x.gf ||
-      x.team.localeCompare(y.team)
+      finalTieBreak(x, y)
     )
     : Object.values(stats).sort((x, y) => x.team.localeCompare(y.team));
 
@@ -1514,7 +1527,7 @@ function computeStandings(groupLetter) {
           mini[y.team].gd - mini[x.team].gd ||
           mini[y.team].gf - mini[x.team].gf ||
           y.fp - x.fp ||
-          x.team.localeCompare(y.team));
+          finalTieBreak(x, y));
         sorted.splice(i, j - i, ...sub);
       }
       i = j;
