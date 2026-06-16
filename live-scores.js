@@ -66,7 +66,17 @@ const liveScores = (() => {
   // fair-play tiebreaker when a finished match's card timeline isn't loaded.
   let standingPos = new Map();
 
+  // Local team name → FIFA IdTeam, built from the calendar (group-stage matches
+  // carry real team names). Powers on-demand squad / team-info lookups shown in
+  // the prediction view. Squad + team payloads are cached per team.
+  const teamIdByName = new Map();
+  const squadCache = new Map();    // IdTeam → normalized players array
+  const teamInfoCache = new Map(); // IdTeam → normalized team-info object
+  const formCache = new Map();     // IdTeam → last-5 results array (60s TTL)
+  const POSITION_LABELS = { 0: "Goalkeeper", 1: "Defender", 2: "Midfielder", 3: "Forward" };
+
   const localName = (n) => TEAM_ALIASES[n] || n;
+  const desc1 = (a) => (Array.isArray(a) && a[0] && a[0].Description) ? a[0].Description : null;
 
   function sideName(side) {
     return (side && Array.isArray(side.TeamName) && side.TeamName[0])
@@ -219,7 +229,104 @@ const liveScores = (() => {
     if (groupMatch) {
       try { await fetchStandings(groupMatch.IdStage); } catch { /* tiebreaker is optional */ }
     }
+    // Index every real team's IdTeam for squad / team-info lookups.
+    for (const fm of calMatches) {
+      for (const side of [fm.Home, fm.Away]) {
+        const nm = sideName(side);
+        if (nm && side && side.IdTeam) teamIdByName.set(nm, side.IdTeam);
+      }
+    }
     return calMatches;
+  }
+
+  async function ensureCalendar() { if (!calMatches) await fetchCalendar(); }
+
+  // Squad list (normalized) for a team, by local name. Each player carries the
+  // stats the squad payload exposes — goals, cards, matches, position, etc. —
+  // so the player-detail view needs no further request.
+  async function getSquadByName(name) {
+    await ensureCalendar();
+    const id = teamIdByName.get(name);
+    if (!id) return null;
+    if (squadCache.has(id)) return squadCache.get(id);
+    const d = await fetchJSON(
+      `${API}/teams/${id}/squad?idCompetition=${ID_COMPETITION}&idSeason=${ID_SEASON}&language=en`
+    );
+    const players = (d.Players || []).map((p) => ({
+      id: p.IdPlayer,
+      name: desc1(p.PlayerName) || desc1(p.ShortName) || "Unknown",
+      num: p.JerseyNum,
+      position: desc1(p.PositionLocalized) || POSITION_LABELS[p.Position] || "",
+      posCode: p.Position,
+      matches: p.MatchesPlayed,
+      goals: p.Goals,
+      yellow: p.YellowCards,
+      red: p.RedCards,
+      dob: p.BirthDate || null,
+      height: p.Height || null,
+      weight: p.Weight || null,
+      // PlayerPicture is an object {PictureUrl}; fall back to the flat fields.
+      photo: (p.PlayerPicture && p.PlayerPicture.PictureUrl) || p.PictureUrl || p.ThumbnailUrl || null,
+    }));
+    squadCache.set(id, players);
+    return players;
+  }
+
+  async function getTeamInfoByName(name) {
+    await ensureCalendar();
+    const id = teamIdByName.get(name);
+    if (!id) return null;
+    if (teamInfoCache.has(id)) return teamInfoCache.get(id);
+    const t = await fetchJSON(`${API}/teams/${id}?language=en`);
+    const info = {
+      name: desc1(t.Name) || name,
+      abbr: t.Abbreviation || null,
+      confederation: t.IdConfederation || null,
+      city: t.City || null,
+      country: t.IdCountry || null,
+      founded: t.FoundationYear || null,
+    };
+    teamInfoCache.set(id, info);
+    return info;
+  }
+
+  // The team's last 5 finished matches across all competitions (form). The
+  // unscoped idTeam calendar query spans competitions; a trailing date window
+  // keeps the payload small. Cached briefly so it can refresh as results land.
+  async function getTeamFormByName(name) {
+    await ensureCalendar();
+    const id = teamIdByName.get(name);
+    if (!id) return null;
+    const hit = formCache.get(id);
+    if (hit && Date.now() - hit.at < 60 * 1000) return hit.form;
+    // FIFA's calendar rejects ISO timestamps with milliseconds — strip them.
+    const isoNoMs = (ms) => new Date(ms).toISOString().replace(/\.\d{3}Z$/, "Z");
+    const from = isoNoMs(Date.now() - 540 * 864e5);
+    const to = isoNoMs(Date.now() + 2 * 864e5);
+    const d = await fetchJSON(
+      `${API}/calendar/matches?idTeam=${id}&from=${from}&to=${to}&count=80&language=en`
+    );
+    const form = (d.Results || [])
+      .filter((m) => m.MatchStatus === STATUS_FINISHED &&
+        m.HomeTeamScore !== null && m.HomeTeamScore !== undefined &&
+        m.AwayTeamScore !== null && m.AwayTeamScore !== undefined)
+      .sort((a, b) => (b.Date || "").localeCompare(a.Date || ""))
+      .slice(0, 5)
+      .map((m) => {
+        const homeIsTeam = m.Home && m.Home.IdTeam === id;
+        const gf = homeIsTeam ? m.HomeTeamScore : m.AwayTeamScore;
+        const ga = homeIsTeam ? m.AwayTeamScore : m.HomeTeamScore;
+        return {
+          date: (m.Date || "").slice(0, 10),
+          opponent: sideName(homeIsTeam ? m.Away : m.Home) || "?",
+          gf, ga,
+          result: gf > ga ? "W" : gf < ga ? "L" : "D",
+          home: homeIsTeam,
+          competition: desc1(m.CompetitionName) || "",
+        };
+      });
+    formCache.set(id, { at: Date.now(), form });
+    return form;
   }
 
   async function fetchStandings(stageId) {
@@ -470,6 +577,9 @@ const liveScores = (() => {
     // FIFA's official within-group position for a team, or null if unknown.
     officialPosition(team) { return standingPos.get(team) || null; },
     getStats,
+    getSquadByName,
+    getTeamInfoByName,
+    getTeamFormByName,
     start(updateCb) {
       onUpdate = updateCb;
       // Tab was backgrounded (polling paused) → refresh as soon as it returns

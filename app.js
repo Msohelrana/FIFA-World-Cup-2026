@@ -2310,10 +2310,16 @@ function renderPickCard(m, ko) {
 
   const f1 = flagFor(t1);
   const f2 = flagFor(t2);
+  // Real (non-placeholder) teams get a clickable name → squad / team-info modal.
+  const t1Known = m.stage === "group" || !!resolved1;
+  const t2Known = m.stage === "group" || !!resolved2;
+  const nameAttrs = (name, known) => known
+    ? ` class="team-name team-info-link" data-team="${escapeHTML(name)}" title="View ${escapeHTML(name)} squad & team info"`
+    : ` class="team-name" title="${escapeHTML(name)}"`;
   const teamsHTML = `<div class="match-teams">
-    <span class="team"><span class="flag">${f1}</span><span class="team-name" title="${t1}">${t1}</span></span>
+    <span class="team"><span class="flag">${f1}</span><span${nameAttrs(t1, t1Known)}>${t1}</span></span>
     <span class="vs">VS</span>
-    <span class="team right"><span class="team-name" title="${t2}">${t2}</span><span class="flag flag-right">${f2}</span></span>
+    <span class="team right"><span${nameAttrs(t2, t2Known)}>${t2}</span><span class="flag flag-right">${f2}</span></span>
   </div>`;
 
   const pick = getMatchPick(m) || {};
@@ -2345,6 +2351,11 @@ function renderPickCard(m, ko) {
 
   const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span></div>`;
   card.innerHTML = meta + teamsHTML + resultLine + footer;
+
+  // Tapping a known team's name opens its squad + team-info (independent of lock).
+  card.querySelectorAll(".team-info-link").forEach(el => {
+    el.addEventListener("click", () => openTeamModal(el.dataset.team));
+  });
 
   if (!locked && teamsKnown) {
     const row = card.querySelector(".result-row");
@@ -5243,6 +5254,222 @@ function showMatchStats(m, t1, t2) {
         : "";
       body.innerHTML = bar + rows + bookings;
     });
+}
+
+// ── Team info + squad modal (data fetched on demand via liveScores) ──
+
+const SQUAD_GROUPS = [[0, "Goalkeepers"], [1, "Defenders"], [2, "Midfielders"], [3, "Forwards"]];
+
+// FIFA digitalhub photos are multi-MB at full size; request a square thumbnail
+// transform (drops a 1.1MB png to a few KB). Other hosts are used as-is.
+function playerPhotoUrl(photo, size) {
+  if (!photo) return null;
+  if (!photo.includes("digitalhub.fifa.com")) return photo;
+  const sep = photo.includes("?") ? "&" : "?";
+  return `${photo}${sep}io=transform:fill,width:${size},height:${size}`;
+}
+
+// Full uncropped portrait for the lightbox — scaled to 720 tall (~60KB vs the
+// ~1.1MB original) rather than cropped to a square like the thumbnails.
+function playerPhotoFull(photo) {
+  if (!photo) return null;
+  if (!photo.includes("digitalhub.fifa.com")) return photo;
+  const sep = photo.includes("?") ? "&" : "?";
+  return `${photo}${sep}io=transform:fit,height:720`;
+}
+
+function openImageLightbox(url, caption) {
+  if (!url) return;
+  const box = document.createElement("div");
+  box.className = "img-lightbox";
+  box.innerHTML = `
+    <button class="img-lightbox-close" type="button" aria-label="Close">✕</button>
+    <figure class="img-lightbox-fig">
+      <img src="${encodeURI(url)}" alt="${caption ? escapeHTML(caption) : ""}">
+      ${caption ? `<figcaption>${escapeHTML(caption)}</figcaption>` : ""}
+    </figure>`;
+  document.body.appendChild(box);
+  const onKey = (e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } };
+  const close = () => { box.remove(); document.removeEventListener("keydown", onKey, true); };
+  // Click anywhere except the image/caption closes; Esc closes (capture so it
+  // doesn't also bubble up and close the team modal underneath).
+  box.addEventListener("click", (e) => {
+    if (e.target.tagName === "IMG" || e.target.tagName === "FIGCAPTION") return;
+    close();
+  });
+  document.addEventListener("keydown", onKey, true);
+  requestAnimationFrame(() => box.classList.add("is-open"));
+}
+
+function playerAvatarHTML(p, size, cls) {
+  const url = playerPhotoUrl(p.photo, size);
+  const img = url
+    ? `<img src="${encodeURI(url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+    : "";
+  return `<span class="${cls}">${img}</span>`;
+}
+
+function playerAge(iso) {
+  if (!iso) return null;
+  const b = new Date(iso);
+  if (isNaN(b.getTime())) return null;
+  const now = new Date();
+  let a = now.getFullYear() - b.getFullYear();
+  const mm = now.getMonth() - b.getMonth();
+  if (mm < 0 || (mm === 0 && now.getDate() < b.getDate())) a--;
+  return (a > 10 && a < 60) ? a : null;
+}
+
+function renderPlayerDetail(p) {
+  const items = [];
+  if (p.position) items.push(["Position", p.position]);
+  if (p.num !== null && p.num !== undefined) items.push(["Shirt", "#" + p.num]);
+  const age = playerAge(p.dob);
+  if (age) items.push(["Age", age]);
+  if (p.height) items.push(["Height", p.height + " cm"]);
+  if (p.weight) items.push(["Weight", p.weight + " kg"]);
+  // Tournament tallies — shown only once the feed populates them.
+  if (p.matches) items.push(["Matches", p.matches]);
+  if (p.goals) items.push(["Goals", p.goals]);
+  if (p.yellow) items.push(["Yellow", p.yellow]);
+  if (p.red) items.push(["Red", p.red]);
+  const grid = items.map(([k, v]) =>
+    `<div class="pd-item"><span class="pd-k">${k}</span><span class="pd-v">${escapeHTML(String(v))}</span></div>`
+  ).join("");
+  const photoUrl = playerPhotoUrl(p.photo, 160);
+  const photo = photoUrl
+    ? `<img class="pd-photo" src="${encodeURI(photoUrl)}" alt="" loading="lazy" onerror="this.remove()"
+         data-full="${encodeURI(playerPhotoFull(p.photo))}" data-name="${escapeHTML(p.name)}" title="View full image">`
+    : "";
+  return `<div class="player-detail-inner">${photo}<div class="pd-grid">${grid}</div></div>`;
+}
+
+function renderTeamForm(form) {
+  if (!form || !form.length) return "";
+  // Newest first. Pills give a quick W/D/L glance; the list adds context.
+  const pills = form.map(f =>
+    `<span class="form-pill form-${f.result}" title="${f.date} ${f.home ? "vs" : "@"} ${escapeHTML(f.opponent)} ${f.gf}-${f.ga}">${f.result}</span>`
+  ).join("");
+  const rows = form.map(f => `
+    <div class="form-match">
+      <span class="form-badge form-${f.result}">${f.result}</span>
+      <span class="form-opp">${f.home ? "vs " : "@ "}<span class="form-opp-flag">${flagFor(f.opponent)}</span>${escapeHTML(f.opponent)}</span>
+      <span class="form-score">${f.gf}–${f.ga}</span>
+      <span class="form-comp">${escapeHTML(f.competition)}</span>
+    </div>`).join("");
+  return `
+    <div class="team-form">
+      <div class="team-form-head">
+        <span class="form-label">Recent form <small>(latest first)</small></span>
+        <span class="form-pills">${pills}</span>
+      </div>
+      <div class="form-list">${rows}</div>
+    </div>`;
+}
+
+function renderSquadList(squad) {
+  const used = new Set();
+  let html = "";
+  const groupHTML = (label, players) => {
+    if (!players.length) return "";
+    const rows = players.map((p) => {
+      const idx = squad.indexOf(p);
+      const goalChip = p.goals ? `<span class="squad-stat">⚽ ${p.goals}</span>` : "";
+      return `
+        <div class="squad-player" data-idx="${idx}">
+          <div class="squad-player-row">
+            <span class="squad-num">${p.num ?? ""}</span>
+            ${playerAvatarHTML(p, 96, "squad-avatar")}
+            <span class="squad-name">${escapeHTML(p.name)}</span>
+            ${goalChip}
+            <span class="squad-chevron" aria-hidden="true">▾</span>
+          </div>
+          <div class="player-detail"></div>
+        </div>`;
+    }).join("");
+    return `<div class="squad-group"><h4 class="squad-group-title">${label}</h4>${rows}</div>`;
+  };
+  for (const [code, label] of SQUAD_GROUPS) {
+    const players = squad.filter(p => p.posCode === code);
+    players.forEach(p => used.add(p));
+    html += groupHTML(label, players);
+  }
+  const rest = squad.filter(p => !used.has(p));
+  html += groupHTML("Other", rest);
+  return html;
+}
+
+function openTeamModal(teamName) {
+  if (typeof liveScores === "undefined" || !liveScores.getSquadByName) return;
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog team-modal" role="dialog" aria-modal="true" aria-labelledby="teamModalTitle">
+      <div class="team-modal-header">
+        <span class="team-modal-flag">${flagFor(teamName)}</span>
+        <div>
+          <h2 id="teamModalTitle">${escapeHTML(teamName)}</h2>
+          <div class="team-modal-sub"></div>
+        </div>
+      </div>
+      <div class="team-modal-body"><p class="stats-msg">Loading team &amp; squad…</p></div>
+      <div class="modal-actions">
+        <button class="modal-btn modal-btn-primary" type="button">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+
+  const close = () => {
+    modal.classList.add("modal-closing");
+    modal.addEventListener("animationend", () => {
+      modal.remove();
+      if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+    }, { once: true });
+  };
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector(".modal-btn").addEventListener("click", close);
+  modal.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  const sub = modal.querySelector(".team-modal-sub");
+  const body = modal.querySelector(".team-modal-body");
+
+  Promise.all([
+    liveScores.getTeamInfoByName(teamName).catch(() => null),
+    liveScores.getSquadByName(teamName).catch(() => null),
+    liveScores.getTeamFormByName ? liveScores.getTeamFormByName(teamName).catch(() => null) : Promise.resolve(null),
+  ]).then(([info, squad, form]) => {
+    if (!modal.isConnected) return; // closed while loading
+    if (info) {
+      const bits = [];
+      if (info.confederation) bits.push(escapeHTML(info.confederation));
+      if (info.founded) bits.push("Est. " + info.founded);
+      if (info.city) bits.push(escapeHTML(info.city));
+      sub.innerHTML = bits.join(" · ");
+    }
+    const formHTML = renderTeamForm(form);
+    if (!squad || squad.length === 0) {
+      body.innerHTML = formHTML + `<p class="stats-msg">Squad list isn't available for this team yet.</p>`;
+      return;
+    }
+    body.innerHTML = formHTML + `<p class="squad-hint">${squad.length} players · tap a name for details</p>` + renderSquadList(squad);
+    body.querySelectorAll(".squad-player").forEach((el) => {
+      el.querySelector(".squad-player-row").addEventListener("click", () => {
+        const open = el.classList.toggle("is-open");
+        const detail = el.querySelector(".player-detail");
+        if (open && detail && !detail.dataset.filled) {
+          detail.innerHTML = renderPlayerDetail(squad[+el.dataset.idx]);
+          detail.dataset.filled = "1";
+        }
+      });
+    });
+    // Tapping a player's detail photo opens a full-image lightbox.
+    body.addEventListener("click", (e) => {
+      const ph = e.target.closest(".pd-photo");
+      if (ph && ph.dataset.full) openImageLightbox(ph.dataset.full, ph.dataset.name);
+    });
+  });
 }
 
 // Admin housekeeping: once a match is FINISHED, persist the FIFA API result
