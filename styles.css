@@ -1719,6 +1719,70 @@ html:has(body.modal-open) {
   border-left: 3px solid var(--gold);
 }
 
+/* Best Third-Place Teams panel */
+.thirds-panel {
+  margin-top: 28px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 20px 20px;
+}
+
+.thirds-panel-title {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.thirds-panel-hint {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.thirds-table-wrap {
+  overflow-x: auto;
+}
+
+.thirds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.thirds-table th,
+.thirds-table td {
+  padding: 7px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.thirds-table th {
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.thirds-table .thirds-team,
+.thirds-table .thirds-team {
+  text-align: left;
+}
+
+.thirds-table tr.qualify-third td {
+  background: rgba(255, 209, 102, 0.08);
+}
+
+.thirds-table tr.qualify-third td:first-child {
+  border-left: 3px solid var(--gold);
+}
+
+.thirds-table tr.thirds-out {
+  opacity: 0.5;
+}
+
+.thirds-table tr.thirds-cutoff td {
+  border-bottom: 2px solid var(--gold);
+}
+
 /* Legend chips in the standings intro */
 .legend-green,
 .legend-gold {
@@ -2047,8 +2111,13 @@ body.is-admin .standings-table .pos {
 .bracket-view[hidden],
 .scorers-leaderboard-view[hidden],
 .predict-view[hidden],
-.picks-view[hidden] {
+.picks-view[hidden],
+.leaderboard-view[hidden] {
   display: none;
+}
+
+.leaderboard-view {
+  padding-top: 16px;
 }
 
 .group-card {

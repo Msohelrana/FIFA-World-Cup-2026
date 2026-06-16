@@ -14,6 +14,7 @@ const els = {
   scorersView: document.getElementById("scorersView"),
   predictView: document.getElementById("predictView"),
   picksView: document.getElementById("picksView"),
+  leaderboardView: document.getElementById("leaderboardView"),
   summary: document.getElementById("summary"),
   tabs: document.querySelectorAll(".tab"),
 };
@@ -63,7 +64,6 @@ const state = {
   matchPicks: loadMatchPicks(),
   currentUser: null,             // {id, name, email} once logged in
   leaderboardUsers: [],          // [{userId, userName, picks, firstSubmittedAt}] for ranking
-  showLeaderboard: false,        // Match Predict tab: hide leaderboard behind a toggle button
   leaderboardLoaded: false,      // true once fetchAll() has been called (lazy)
   isAdmin: false,                // set by auth bootstrap once currentUser is known
   bracketLayout: localStorage.getItem("wc26_bracketLayout") || "onesided",
@@ -374,6 +374,7 @@ function rerenderActive() {
   else if (state.view === "scorers") renderTopScorers();
   else if (state.view === "predict") renderPredict();
   else if (state.view === "picks") renderPicks();
+  else if (state.view === "leaderboard") renderLeaderboardView();
   updateProgressBar();
 }
 
@@ -1262,6 +1263,67 @@ function isGroupStageComplete() {
     });
 }
 
+// Builds a KO assignment object based on current standings, always resolving
+// teams from live group standings regardless of whether the group stage is complete.
+// Used for the "Current Bracket" view in Table Predict.
+function buildCurrentBracketKo() {
+  const winners = {};
+  const runnersUp = {};
+  const thirds = [];
+
+  for (const letter of Object.keys(GROUPS)) {
+    const s = computeStandings(letter);
+    if (s[0]) winners[letter] = s[0].team;
+    if (s[1]) runnersUp[letter] = s[1].team;
+    if (s[2]) thirds.push({ group: letter, ...s[2] });
+  }
+
+  thirds.sort((a, b) =>
+    b.points - a.points || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team)
+  );
+  const top8 = thirds.slice(0, 8);
+
+  const thirdsAssignments = {};
+  if (top8.length === 8) {
+    const matrixLookup = (typeof lookupFifaThirdPlaceMatrix === "function")
+      ? lookupFifaThirdPlaceMatrix(top8.map(t => t.group))
+      : null;
+
+    if (matrixLookup) {
+      const groupToTeam = {};
+      for (const t of top8) groupToTeam[t.group] = t;
+      for (const m of FIXTURES) {
+        if (m.stage !== "r32") continue;
+        const winMatch = m.team1.match(/^Winner ([A-L])$/);
+        if (!winMatch) continue;
+        const winnerLetter = winMatch[1];
+        const thirdGroup = matrixLookup[winnerLetter];
+        if (!thirdGroup) continue;
+        const teamInfo = groupToTeam[thirdGroup];
+        if (teamInfo) thirdsAssignments[`${matchId(m)}:2`] = teamInfo;
+      }
+    } else {
+      const used = new Set();
+      for (const m of FIXTURES) {
+        if (m.stage !== "r32") continue;
+        for (const pos of [1, 2]) {
+          const ph = pos === 1 ? m.team1 : m.team2;
+          if (!ph.startsWith("3rd ")) continue;
+          const candidates = ph.replace("3rd ", "").split("/");
+          const pick = top8.find(t => !used.has(t.team) && candidates.includes(t.group));
+          if (pick) {
+            thirdsAssignments[`${matchId(m)}:${pos}`] = pick;
+            used.add(pick.team);
+          }
+        }
+      }
+    }
+  }
+
+  // Force complete=true so resolveTeamName resolves all R32 slots
+  return { complete: true, winners, runnersUp, allThirds: thirds, top8, thirdsAssignments };
+}
+
 function getKnockoutAssignments() {
   const complete = isGroupStageComplete();
   const winners = {};
@@ -1535,13 +1597,65 @@ function buildStandingsTable(letter, thirdQualifyingGroups) {
 function patchStandingsTables(changedGroups) {
   const grid = els.standingsView.querySelector(".standings-grid");
   if (!grid) { renderStandings(); return; }
-  const ko = getKnockoutAssignments();
-  const thirdQualifyingGroups = new Set(ko.complete ? ko.top8.map(t => t.group) : []);
+  const ko = buildCurrentBracketKo();
+  const thirdQualifyingGroups = new Set(ko.top8.map(t => t.group));
   for (const letter of changedGroups) {
     const existing = grid.querySelector(`.standings-table[data-group="${letter}"]`);
     if (!existing) continue;
     existing.replaceWith(buildStandingsTable(letter, thirdQualifyingGroups));
   }
+  const existingPanel = els.standingsView.querySelector(".thirds-panel");
+  if (existingPanel) existingPanel.replaceWith(renderThirdPlacePanel(ko.allThirds));
+}
+
+function renderThirdPlacePanel(allThirds) {
+  if (!allThirds) allThirds = buildCurrentBracketKo().allThirds;
+
+  const panel = document.createElement("div");
+  panel.className = "thirds-panel";
+  const thirds = allThirds;
+
+  if (thirds.length === 0) {
+    panel.innerHTML = `<h3 class="thirds-panel-title">Best Third-Place Teams</h3><p class="thirds-panel-hint">No group matches played yet.</p>`;
+    return panel;
+  }
+
+  const rows = thirds.map((r, i) => {
+    const isQ = i < 8;
+    const gdStr = r.gd > 0 ? "+" + r.gd : r.gd;
+    return `
+      <tr class="${isQ ? "qualify-third" : "thirds-out"}${i === 7 ? " thirds-cutoff" : ""}">
+        <td class="thirds-pos">${i + 1}</td>
+        <td class="thirds-team"><span class="flag">${flagFor(r.team)}</span>${escapeHTML(r.team)}</td>
+        <td class="thirds-group">Group ${r.group}</td>
+        <td>${r.points}</td>
+        <td>${gdStr}</td>
+        <td>${r.gf}</td>
+        <td>${r.played}</td>
+      </tr>`;
+  }).join("");
+
+  panel.innerHTML = `
+    <h3 class="thirds-panel-title">Best Third-Place Teams</h3>
+    <p class="thirds-panel-hint">Top 8 of 12 third-placed teams qualify for the Round of 32 (<span class="legend-gold">gold</span>). Updates live.</p>
+    <div class="thirds-table-wrap">
+      <table class="thirds-table">
+        <thead>
+          <tr>
+            <th class="thirds-pos">#</th>
+            <th class="thirds-team">Team</th>
+            <th class="thirds-group">Group</th>
+            <th title="Points">Pts</th>
+            <th title="Goal Difference">GD</th>
+            <th title="Goals For">GF</th>
+            <th title="Played">P</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+  return panel;
 }
 
 function renderStandings() {
@@ -1550,7 +1664,7 @@ function renderStandings() {
   const intro = document.createElement("div");
   intro.className = "standings-intro";
   intro.innerHTML = `
-    <p>Tables below update live. Top two from each group qualify (<span class="legend-green">green</span>), plus the 8 best third-placed teams across all groups (<span class="legend-gold">gold</span>, once the group stage is complete).</p>
+    <p>Tables below update live. Top two from each group qualify (<span class="legend-green">green</span>), plus the 8 best third-placed teams across all groups (<span class="legend-gold">gold</span>). See the ranked table below the group tables.</p>
     ${state.isAdmin ? `
       <div class="action-row">
         <button id="exportBtn" type="button" class="action-btn">⬇ Export results</button>
@@ -1665,9 +1779,8 @@ function renderStandings() {
   const grid = document.createElement("div");
   grid.className = "standings-grid";
 
-  // Once the group stage is complete, the best 8 of 12 third-placed teams also qualify.
-  const ko = getKnockoutAssignments();
-  const thirdQualifyingGroups = new Set(ko.complete ? ko.top8.map(t => t.group) : []);
+  const ko = buildCurrentBracketKo();
+  const thirdQualifyingGroups = new Set(ko.top8.map(t => t.group));
 
   const letters = Object.keys(GROUPS).sort();
   for (const letter of letters) {
@@ -1676,6 +1789,7 @@ function renderStandings() {
   }
 
   els.standingsView.appendChild(grid);
+  els.standingsView.appendChild(renderThirdPlacePanel(ko.allThirds));
 
   // Admin: wire up row reorder + per-group reset buttons (event delegation).
   if (state.isAdmin) {
@@ -1711,9 +1825,9 @@ function moveStandingsRow(letter, fromIndex, dir) {
   renderStandings();
 }
 
-function renderBracket() {
+function renderBracket(ko) {
   els.bracketView.innerHTML = "";
-  const ko = getKnockoutAssignments();
+  if (!ko) ko = buildCurrentBracketKo();
 
   const finalMatch = FIXTURES.find(m => m.stage === "final");
   const champion = finalMatch ? getKnockoutOutcome(finalMatch, "winner", ko) : null;
@@ -1909,13 +2023,6 @@ function pickResultLabel(m, pick, t1, t2) {
 
 function renderPicks() {
   const view = els.picksView;
-
-  // FLIP step 1 — record current row positions before wiping the DOM
-  const lbFirstPos = new Map();
-  view.querySelectorAll("tr[data-uid]").forEach(tr => {
-    lbFirstPos.set(tr.dataset.uid, tr.getBoundingClientRect().top);
-  });
-
   view.innerHTML = "";
 
   // Sign-in banner (only when not logged in) — non-blocking; local picks still work
@@ -1945,34 +2052,15 @@ function renderPicks() {
   const header = document.createElement("div");
   header.className = "predict-header";
   const savedNote = state.currentUser ? " (synced to your account)" : " (this device only)";
-  const lbLabel = state.showLeaderboard ? "🏆 Hide leaderboard" : "🏆 Leaderboard";
   header.innerHTML = `
     <p>Predict the final score of every match. Locks at each match's kickoff.
        <strong style="color: var(--accent-2)">${filled}/${total}</strong> filled in${savedNote}.</p>
     <div class="predict-header-actions">
-      <button type="button" id="picksLeaderboardBtn" class="action-btn${state.showLeaderboard ? " is-active" : ""}">${lbLabel}</button>
       <button type="button" id="picksRulesBtn" class="action-btn">📖 Rules</button>
       <button type="button" id="picksResetBtn" class="danger-btn">Reset all picks</button>
     </div>
   `;
   view.appendChild(header);
-  header.querySelector("#picksLeaderboardBtn").addEventListener("click", async () => {
-    state.showLeaderboard = !state.showLeaderboard;
-    if (state.showLeaderboard && !state.leaderboardLoaded && userPicksSync.available) {
-      renderPicks(); // render immediately with partial data (shows spinner/skeleton)
-      const all = await userPicksSync.fetchAll();
-      state.leaderboardUsers = all || [];
-      state.leaderboardLoaded = true;
-      userPicksSync.subscribe();
-    }
-    renderPicks();
-    if (state.showLeaderboard) {
-      requestAnimationFrame(() => {
-        const lb = view.querySelector(".picks-leaderboard-section");
-        if (lb && lb.scrollIntoView) lb.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  });
   header.querySelector("#picksRulesBtn").addEventListener("click", openRulesModal);
   header.querySelector("#picksResetBtn").addEventListener("click", async () => {
     const ok = await showConfirm("Clear your predictions for upcoming matches? Picks for matches that already kicked off are locked and will be kept.", {
@@ -1994,47 +2082,6 @@ function renderPicks() {
     if (state.currentUser) userPicksSync.saveOwn();
     renderPicks();
   });
-
-  // Leaderboard renders inline only when toggled on
-  if (state.showLeaderboard) {
-    // Detect a newly scored exact prediction and fire confetti
-    if (state.currentUser) {
-      const myEntry = state.leaderboardUsers.find(u => u.userId === state.currentUser.id);
-      if (myEntry) {
-        const myStats = computeUserLeaderboardRow(myEntry);
-        if (_lastMyExactCount !== null && myStats.exactCount > _lastMyExactCount) {
-          fireConfetti();
-        }
-        _lastMyExactCount = myStats.exactCount;
-      }
-    }
-
-    const lb = renderPicksLeaderboard();
-    view.appendChild(lb);
-
-    // FLIP steps 2-4 — animate rows from their old positions to their new ones
-    if (lbFirstPos.size > 0) {
-      requestAnimationFrame(() => {
-        lb.querySelectorAll("tr[data-uid]").forEach(tr => {
-          const first = lbFirstPos.get(tr.dataset.uid);
-          if (first === undefined) return;
-          const last = tr.getBoundingClientRect().top;
-          const delta = first - last;
-          if (Math.abs(delta) < 1) return;
-          tr.style.transition = "none";
-          tr.style.transform = `translateY(${delta}px)`;
-          requestAnimationFrame(() => {
-            tr.style.transition = "transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
-            tr.style.transform = "";
-            tr.addEventListener("transitionend", () => {
-              tr.style.transition = "";
-              tr.style.transform = "";
-            }, { once: true });
-          });
-        });
-      });
-    }
-  }
 
   // Bucket matches into three sections
   const tz = state.selectedTz;
@@ -2649,7 +2696,7 @@ function renderPicksLeaderboard() {
   wrap.querySelectorAll(".lb-bonus-input").forEach(inp => {
     inp.addEventListener("change", () => {
       setUserBonus(inp.dataset.uid, inp.value);
-      renderPicks();
+      rerenderActive();
     });
   });
   // Admin: view user predictions modal
@@ -2657,6 +2704,45 @@ function renderPicksLeaderboard() {
     btn.addEventListener("click", () => openUserPredictionsModal(btn.dataset.uid, btn.dataset.name));
   });
   return wrap;
+}
+
+function renderLeaderboardView() {
+  const view = els.leaderboardView;
+  view.innerHTML = "";
+
+  if (appwriteAuth.available && !state.currentUser) {
+    const banner = document.createElement("div");
+    banner.className = "picks-signin-banner";
+    banner.innerHTML = `
+      <div class="picks-signin-text">
+        <strong>Sign in</strong> to save your picks and join the prediction leaderboard.
+        Without an account, picks stay on this device only.
+      </div>
+      <div class="picks-signin-actions">
+        <button type="button" class="action-btn" id="lbSignInBtn">Sign in</button>
+        <button type="button" class="action-btn" id="lbSignUpBtn">Create account</button>
+      </div>
+    `;
+    view.appendChild(banner);
+    banner.querySelector("#lbSignInBtn").addEventListener("click", () => openAuthModal("signin"));
+    banner.querySelector("#lbSignUpBtn").addEventListener("click", () => openAuthModal("signup"));
+  }
+
+  if (!state.leaderboardLoaded && userPicksSync.available) {
+    const spinner = document.createElement("p");
+    spinner.className = "picks-lb-loading";
+    spinner.textContent = "Loading leaderboard…";
+    view.appendChild(spinner);
+    userPicksSync.fetchAll().then(all => {
+      state.leaderboardUsers = all || [];
+      state.leaderboardLoaded = true;
+      userPicksSync.subscribe();
+      if (state.view === "leaderboard") renderLeaderboardView();
+    });
+    return;
+  }
+
+  view.appendChild(renderPicksLeaderboard());
 }
 
 function renderTopScorers() {
@@ -3248,11 +3334,10 @@ function renderPredictGroupsSection() {
     const card = document.createElement("div");
     card.className = "predict-group-card";
     const order = getPredictedGroupOrder(letter);
-    const locked = isGroupLocked(letter) || isViewingShared();
+    const locked = isViewingShared();
     if (locked) card.classList.add("is-locked");
-    const lockBadge = (isGroupLocked(letter)) ? `<span class="predict-lock-badge" title="Locked — group matches have started">🔒 Locked</span>` : "";
     card.innerHTML = `
-      <h3>Group ${letter}${lockBadge}</h3>
+      <h3>Group ${letter}</h3>
       <ol class="predict-group-list">
         ${order.map((team, idx) => `
           <li class="predict-team-row ${idx < 2 ? "qualify" : idx === 2 ? "third" : "out"}">
@@ -3270,8 +3355,6 @@ function renderPredictGroupsSection() {
     if (!locked) {
       card.querySelectorAll(".predict-move-btn").forEach(btn => {
         btn.addEventListener("click", () => {
-          // Re-check at click time in case the group just locked while user was looking
-          if (isGroupLocked(letter)) { renderPredict(); return; }
           const team = btn.dataset.team;
           const dir = btn.dataset.dir;
           const curr = getPredictedGroupOrder(letter);
@@ -3315,22 +3398,20 @@ function renderPredictThirdsSection() {
   const grid = section.querySelector(".predict-thirds-grid");
   for (const { group, team } of thirds) {
     const isSelected = selected.has(team);
-    const isLocked = isGroupLocked(group) || isViewingShared();
-    // Lock disables further changes; reaching 8 disables only the unselected ones
+    const isLocked = isViewingShared();
+    // Reaching 8 disables only the unselected ones
     const isDisabled = isLocked || (!isSelected && count >= 8);
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = `predict-third-chip${isSelected ? " is-selected" : ""}${isDisabled ? " is-disabled" : ""}${isLocked ? " is-locked" : ""}`;
     chip.disabled = isDisabled;
-    if (isLocked) chip.title = "Locked — group matches have started";
     chip.innerHTML = `
-      <span class="predict-third-group">3rd ${group}${isLocked ? " 🔒" : ""}</span>
+      <span class="predict-third-group">3rd ${group}</span>
       <span class="flag">${flagFor(team)}</span>
       <span class="predict-third-team">${escapeHTML(team)}</span>
     `;
     if (!isLocked) {
       chip.addEventListener("click", () => {
-        if (isGroupLocked(group)) { renderPredict(); return; }
         toggleBestThird(team);
         renderPredict();
       });
@@ -3345,13 +3426,6 @@ function renderPredictBracketSection() {
   section.className = "predict-step";
 
   const predKo = buildPredictionKo();
-  if (!predKo.complete) {
-    section.innerHTML = `
-      <h2 class="predict-step-title"><span class="predict-step-num">3</span> Bracket</h2>
-      <p class="predict-step-hint">Pick your 8 best third-place teams above to unlock the bracket.</p>
-    `;
-    return section;
-  }
 
   const finalMatch = FIXTURES.find(m => m.stage === "final");
   const champion = finalMatch ? predictGetWinner(finalMatch, predKo) : null;
@@ -3451,7 +3525,7 @@ function renderPredictBracketSection() {
 function renderPredictBracketMatch(m, predKo) {
   const { team1, team2 } = predictResolveMatchTeams(m, predKo);
   const winner = predictGetWinner(m, predKo);
-  const locked = isMatchLocked(m) || isViewingShared();
+  const locked = isViewingShared();
 
   const card = document.createElement("div");
   card.className = "bracket-match predict-bracket-match";
@@ -3465,15 +3539,13 @@ function renderPredictBracketMatch(m, predKo) {
            ${clickable ? `data-team="${safeTeam}"` : ""}
            role="${clickable ? "button" : ""}"
            tabindex="${clickable ? "0" : "-1"}"
-           ${locked ? `title="Locked — match has kicked off"` : ""}>
+           >
         <span class="flag">${team ? flagFor(team) : ""}</span>
         <span class="bracket-team-name" title="${safeTeam}">${team || "TBD"}</span>
       </div>`;
   };
 
-  const lockBadge = locked
-    ? `<div class="predict-bracket-lock" title="Locked — match has kicked off">🔒</div>`
-    : "";
+  const lockBadge = "";
 
   card.innerHTML =
     row(team1, winner && winner === team1, winner && winner !== team1, !team1, 1) +
@@ -3483,13 +3555,21 @@ function renderPredictBracketMatch(m, predKo) {
   card.querySelectorAll(".predict-bracket-team.clickable").forEach(el => {
     const pickTeam = el.dataset.team;
     const select = () => {
-      // Defense in depth — recheck lock at click time
-      if (isMatchLocked(m)) { renderPredict(); return; }
+      // Save horizontal scroll before re-render so the right side of the
+      // two-sided bracket doesn't jump back to the left after picking.
+      const scrollEl = els.predictView.querySelector(".bracket-scroll");
+      const savedScroll = scrollEl ? scrollEl.scrollLeft : 0;
+
       const current = state.prediction.koWinners[matchId(m)];
-      // Clicking the already-winner clears the pick; clicking the other team replaces it
       setPredictKoWinner(m, current === pickTeam ? null : pickTeam);
-      // Clearing or changing a pick can cascade — re-render the whole bracket section
       renderPredict();
+
+      if (savedScroll > 0) {
+        requestAnimationFrame(() => {
+          const newScroll = els.predictView.querySelector(".bracket-scroll");
+          if (newScroll) newScroll.scrollLeft = savedScroll;
+        });
+      }
     };
     el.addEventListener("click", select);
     el.addEventListener("keydown", e => {
@@ -3567,6 +3647,7 @@ function switchView(view) {
   els.scorersView.hidden = view !== "scorers";
   els.predictView.hidden = view !== "predict";
   els.picksView.hidden = view !== "picks";
+  els.leaderboardView.hidden = view !== "leaderboard";
   if (view === "schedule") render();
   if (view === "groups") renderGroups();
   if (view === "standings") renderStandings();
@@ -3574,6 +3655,7 @@ function switchView(view) {
   if (view === "scorers") renderTopScorers();
   if (view === "predict") renderPredict();
   if (view === "picks") renderPicks();
+  if (view === "leaderboard") renderLeaderboardView();
 }
 
 function render() {
@@ -5006,7 +5088,8 @@ function archiveFinishedApiResults() {
 }
 
 if (typeof liveScores !== "undefined") {
-  let lastLiveKo = ""; // knockout assignments at last poll, serialized
+  let lastLiveKo = "";        // serialized KO assignments at last schedule poll
+  let lastLiveBracketKo = ""; // serialized KO assignments at last bracket poll
   liveScores.start((changedIds) => {
     const archived = archiveFinishedApiResults();
     if (!changedIds.length && !archived) return;
@@ -5030,14 +5113,15 @@ if (typeof liveScores !== "undefined") {
       if (changedGroups.size) patchStandingsTables(changedGroups);
       return;
     }
-    // Bracket: group-stage goals don't change bracket slots — only re-render
-    // if a KO match changed (live score in that box) or a match was archived.
+    // Bracket: only re-render when the projected KO assignments actually changed.
+    // A live score update that doesn't shift any group position is skipped.
     if (state.view === "bracket") {
-      const hasKoChange = archived || changedIds.some(id => {
-        const m = FIXTURES.find(fx => matchId(fx) === id);
-        return m && m.stage !== "group";
-      });
-      if (hasKoChange) renderBracket();
+      const ko = buildCurrentBracketKo();
+      const koJSON = JSON.stringify(ko);
+      if (koJSON !== lastLiveBracketKo) {
+        lastLiveBracketKo = koJSON;
+        renderBracket(ko);
+      }
       return;
     }
     // Scorers: reads state.results only — live goals aren't stored there until
@@ -5052,7 +5136,7 @@ if (typeof liveScores !== "undefined") {
     if (state.view !== "schedule") { rerenderActive(); return; }
     // Schedule view: replace only the changed match cards — unless knockout
     // assignments shifted, which can rename teams in unrelated cards.
-    const ko = getKnockoutAssignments();
+    const ko = buildCurrentBracketKo();
     const koJSON = JSON.stringify(ko);
     if (koJSON !== lastLiveKo) {
       lastLiveKo = koJSON;
