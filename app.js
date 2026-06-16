@@ -21,6 +21,10 @@ const els = {
 
 const RESULTS_KEY = "wc2026_results";
 const OVERRIDE_KEY = "wc2026_standings_override";
+// Reserved key inside state.standingsOverride for the global best-thirds ranking
+// override (admin-set). It's not a real group letter (groups are A–L), so it
+// never collides with per-group overrides and reuses the same Appwrite sync.
+const THIRDS_OVERRIDE_KEY = "T";
 
 // Admin status is derived from the logged-in Appwrite user — only this account
 // can edit official results, standings overrides, and scorers. Other signed-in
@@ -1281,7 +1285,8 @@ function buildCurrentBracketKo() {
   thirds.sort((a, b) =>
     b.points - a.points || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team)
   );
-  const top8 = thirds.slice(0, 8);
+  const rankedThirds = applyThirdsOverride(thirds);
+  const top8 = rankedThirds.slice(0, 8);
 
   const thirdsAssignments = {};
   if (top8.length === 8) {
@@ -1321,7 +1326,24 @@ function buildCurrentBracketKo() {
   }
 
   // Force complete=true so resolveTeamName resolves all R32 slots
-  return { complete: true, winners, runnersUp, allThirds: thirds, top8, thirdsAssignments };
+  return { complete: true, winners, runnersUp, allThirds: rankedThirds, top8, thirdsAssignments };
+}
+
+// Reorders the ranked third-place table by the admin override (a list of group
+// letters), mirroring the per-group standings override. Used to make the best-8
+// cut match FIFA when third-placed teams are tied beyond what the app computes
+// (fair play / drawing of lots). Returns the input unchanged when no override.
+function applyThirdsOverride(thirds) {
+  const override = state.standingsOverride[THIRDS_OVERRIDE_KEY];
+  if (!Array.isArray(override) || override.length === 0) return thirds;
+  const byGroup = new Map(thirds.map(r => [r.group, r]));
+  const ordered = [];
+  for (const g of override) {
+    if (byGroup.has(g)) { ordered.push(byGroup.get(g)); byGroup.delete(g); }
+  }
+  // Append any thirds not named in the override, keeping their computed order.
+  for (const r of byGroup.values()) ordered.push(r);
+  return ordered;
 }
 
 function getKnockoutAssignments() {
@@ -1340,7 +1362,7 @@ function getKnockoutAssignments() {
   thirds.sort((a, b) =>
     b.points - a.points || b.gd - a.gd || b.gf - a.gf || a.team.localeCompare(b.team)
   );
-  const top8 = thirds.slice(0, 8);
+  const top8 = applyThirdsOverride(thirds).slice(0, 8);
 
   // Assign the 8 qualifying third-placers to R32 slots. When the official
   // FIFA matrix (495-row lookup) is loaded, use it for an exact match to
@@ -1633,9 +1655,19 @@ function renderThirdPlacePanel(allThirds) {
     return panel;
   }
 
+  const isAdmin = state.isAdmin;
+  const hasOverride = Array.isArray(state.standingsOverride[THIRDS_OVERRIDE_KEY]) &&
+    state.standingsOverride[THIRDS_OVERRIDE_KEY].length > 0;
+
   const rows = thirds.map((r, i) => {
     const isQ = i < 8;
     const gdStr = r.gd > 0 ? "+" + r.gd : r.gd;
+    const moveBtns = isAdmin
+      ? `<td class="thirds-move"><span class="row-move">
+             <button class="row-move-btn thirds-move-btn" data-from="${i}" data-dir="-1" ${i === 0 ? "disabled" : ""} title="Move up">▲</button>
+             <button class="row-move-btn thirds-move-btn" data-from="${i}" data-dir="1" ${i === thirds.length - 1 ? "disabled" : ""} title="Move down">▼</button>
+           </span></td>`
+      : "";
     return `
       <tr class="${isQ ? "qualify-third" : "thirds-out"}${i === 7 ? " thirds-cutoff" : ""}">
         <td class="thirds-pos">${i + 1}</td>
@@ -1645,12 +1677,21 @@ function renderThirdPlacePanel(allThirds) {
         <td>${gdStr}</td>
         <td>${r.gf}</td>
         <td>${r.played}</td>
+        ${moveBtns}
       </tr>`;
   }).join("");
 
+  const resetBtn = (isAdmin && hasOverride)
+    ? `<button class="reset-order-btn thirds-reset-btn" title="Reset to computed order">↻ Reset order</button>`
+    : "";
+  const adminHint = isAdmin
+    ? `<p class="thirds-panel-hint">Admin: reorder with ▲▼ to set which 8 qualify when third-placed teams are tied beyond goals (FIFA fair play / drawing of lots). Your order syncs to all viewers.</p>`
+    : "";
+
   panel.innerHTML = `
-    <h3 class="thirds-panel-title">Best Third-Place Teams</h3>
+    <h3 class="thirds-panel-title">Best Third-Place Teams ${resetBtn}</h3>
     <p class="thirds-panel-hint">Top 8 of 12 third-placed teams qualify for the Round of 32 (<span class="legend-gold">gold</span>). Updates live.</p>
+    ${adminHint}
     <div class="thirds-table-wrap">
       <table class="thirds-table">
         <thead>
@@ -1662,13 +1703,43 @@ function renderThirdPlacePanel(allThirds) {
             <th title="Goal Difference">GD</th>
             <th title="Goals For">GF</th>
             <th title="Played">P</th>
+            ${isAdmin ? `<th class="thirds-move" title="Reorder">⇅</th>` : ""}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
   `;
+
+  // Admin reorder + reset (listener lives on the panel so it survives the
+  // wholesale panel replacement done by patchStandingsTables).
+  if (isAdmin) {
+    panel.addEventListener("click", (e) => {
+      const moveBtn = e.target.closest(".thirds-move-btn");
+      const reset = e.target.closest(".thirds-reset-btn");
+      if (moveBtn) {
+        moveThirdsRow(+moveBtn.dataset.from, +moveBtn.dataset.dir);
+      } else if (reset) {
+        delete state.standingsOverride[THIRDS_OVERRIDE_KEY];
+        saveStandingsOverride();
+        appwriteSync.scheduleStandings(THIRDS_OVERRIDE_KEY);
+        renderStandings();
+      }
+    });
+  }
   return panel;
+}
+
+function moveThirdsRow(fromIndex, dir) {
+  // Capture the current displayed ranking (group letters), swap, and pin it.
+  const order = buildCurrentBracketKo().allThirds.map(r => r.group);
+  const to = fromIndex + dir;
+  if (to < 0 || to >= order.length) return;
+  [order[fromIndex], order[to]] = [order[to], order[fromIndex]];
+  state.standingsOverride[THIRDS_OVERRIDE_KEY] = order;
+  saveStandingsOverride();
+  appwriteSync.scheduleStandings(THIRDS_OVERRIDE_KEY);
+  renderStandings();
 }
 
 function renderStandings() {
