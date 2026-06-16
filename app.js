@@ -2708,6 +2708,14 @@ function renderPicksLeaderboard() {
 
 function renderLeaderboardView() {
   const view = els.leaderboardView;
+
+  // FLIP step 1 — record current row positions before wiping the DOM, so we
+  // can slide each row from its old spot to its new one after the rebuild.
+  const lbFirstPos = new Map();
+  view.querySelectorAll("tr[data-uid]").forEach(tr => {
+    lbFirstPos.set(tr.dataset.uid, tr.getBoundingClientRect().top);
+  });
+
   view.innerHTML = "";
 
   if (appwriteAuth.available && !state.currentUser) {
@@ -2742,7 +2750,44 @@ function renderLeaderboardView() {
     return;
   }
 
+  // Celebrate when one of the current user's predictions has just scored exact —
+  // fire confetti the moment their exact-score count ticks up.
+  if (state.currentUser) {
+    const myEntry = state.leaderboardUsers.find(u => u.userId === state.currentUser.id);
+    if (myEntry) {
+      const myStats = computeUserLeaderboardRow(myEntry);
+      if (_lastMyExactCount !== null && myStats.exactCount > _lastMyExactCount) {
+        fireConfetti();
+      }
+      _lastMyExactCount = myStats.exactCount;
+    }
+  }
+
   view.appendChild(renderPicksLeaderboard());
+
+  // FLIP steps 2-4 — animate each row from its old pixel position to the new
+  // one (translateY + transition), giving the live-standings slide effect.
+  if (lbFirstPos.size > 0) {
+    requestAnimationFrame(() => {
+      view.querySelectorAll("tr[data-uid]").forEach(tr => {
+        const first = lbFirstPos.get(tr.dataset.uid);
+        if (first === undefined) return;
+        const last = tr.getBoundingClientRect().top;
+        const delta = first - last;
+        if (Math.abs(delta) < 1) return;
+        tr.style.transition = "none";
+        tr.style.transform = `translateY(${delta}px)`;
+        requestAnimationFrame(() => {
+          tr.style.transition = "transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+          tr.style.transform = "";
+          tr.addEventListener("transitionend", () => {
+            tr.style.transition = "";
+            tr.style.transform = "";
+          }, { once: true });
+        });
+      });
+    });
+  }
 }
 
 function renderTopScorers() {
@@ -4545,6 +4590,7 @@ const userPicksSync = (() => {
           else state.leaderboardUsers.push(row);
         }
         if (state.view === "picks") renderPicks();
+        else if (state.view === "leaderboard") renderLeaderboardView();
       });
     } catch (err) {
       console.warn("User picks subscribe failed:", err.message || err);
