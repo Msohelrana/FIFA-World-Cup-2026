@@ -789,9 +789,11 @@ html:has(body.modal-open) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  /* let countdown chip wrap on narrow cards */
-  gap: 6px;
+  /* Single row — wrapping made the countdown chip hop to the next line and
+     back as its text length changed (e.g. "in 4d 23h" → "23:45:12"). The stage
+     badge is the flexible element that ellipsizes if space gets tight. */
+  flex-wrap: nowrap;
+  gap: 8px;
   margin-bottom: 10px;
   font-size: 12px;
   color: var(--text-dim);
@@ -808,6 +810,8 @@ html:has(body.modal-open) {
   font-weight: 600;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .match-countdown.upcoming {
@@ -873,6 +877,8 @@ html:has(body.modal-open) {
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, "Liberation Mono", monospace;
   letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .stage-badge {
@@ -885,6 +891,12 @@ html:has(body.modal-open) {
   background: rgba(76, 201, 240, 0.15);
   color: var(--accent-2);
   border: 1px solid rgba(76, 201, 240, 0.3);
+  /* Pressure valve: shrink/ellipsize before the time or countdown ever wrap. */
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stage-badge.group {
