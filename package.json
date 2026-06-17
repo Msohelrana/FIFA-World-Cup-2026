@@ -1,0 +1,13 @@
+{
+  "name": "fifa-world-cup-2026",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Admin tooling for the FIFA World Cup 2026 PWA — Firestore scorer/result backfill from the FIFA API.",
+  "scripts": {
+    "backfill": "node backfill-scorers.mjs"
+  },
+  "devDependencies": {
+    "firebase-admin": "^14.0.0"
+  }
+}

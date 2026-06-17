@@ -6,7 +6,7 @@
 //   - Appwrite realtime (WebSocket): not intercepted; the browser handles it natively
 //   - Anything else same-origin: stale-while-revalidate
 
-const CACHE_VERSION = "1781600000";
+const CACHE_VERSION = "1781800000";
 const APP_CACHE = `wc2026-app-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `wc2026-runtime-${CACHE_VERSION}`;
 
@@ -56,12 +56,14 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Flag images + CDN scripts: cache-first, they're effectively immutable
+  // Flag images + CDN scripts (incl. the versioned Firebase SDK on gstatic):
+  // cache-first, they're effectively immutable.
   if (
     url.hostname === "flagcdn.com" ||
     url.hostname === "upload.wikimedia.org" ||
     url.hostname === "cdn.jsdelivr.net" ||
-    url.hostname === "cdnjs.cloudflare.com"
+    url.hostname === "cdnjs.cloudflare.com" ||
+    url.hostname === "www.gstatic.com"
   ) {
     event.respondWith(cacheFirst(req));
     return;

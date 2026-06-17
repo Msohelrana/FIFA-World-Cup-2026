@@ -29,7 +29,7 @@ const THIRDS_OVERRIDE_KEY = "T";
 // Admin status is derived from the logged-in Appwrite user — only this account
 // can edit official results, standings overrides, and scorers. Other signed-in
 // users are regular viewers.
-function isUserAdmin(user) { return !!user && Array.isArray(user.labels) && user.labels.includes("admin"); }
+function isUserAdmin(user) { return !!user && typeof user.email === "string" && ADMIN_EMAILS.map(e => e.toLowerCase()).includes(user.email.toLowerCase()); }
 const PREDICTION_KEY = "wc2026_prediction";
 const MATCH_PICKS_KEY = "wc2026_match_picks";
 
@@ -4139,39 +4139,50 @@ async function afterLogin() {
   if (state.view === "picks") renderPicks();
 }
 
-// ===== Appwrite real-time sync =====
-const APPWRITE_CONFIG = {
-  endpoint: "https://sgp.cloud.appwrite.io/v1",
-  projectId: "6a264e98000a60c067f3",
-  databaseId: "6a2650420015db5d5e8a",
-  resultsCollection: "matchresults",
-  standingsCollection: "standingsoverrides",
-  userPicksCollection: "userpicks",
+// ===== Firebase backend config =====
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCNC2IsCGqZjyapHwDD7yH_9FoNeFjurOY",
+  authDomain: "wc2026-aaddd.firebaseapp.com",
+  projectId: "wc2026-aaddd",
+  storageBucket: "wc2026-aaddd.firebasestorage.app",
+  messagingSenderId: "689847361298",
+  appId: "1:689847361298:web:94be2c7f0b47e74a031dcb",
 };
+// Admins are identified by email — must match the Firestore security rules.
+const ADMIN_EMAILS = ["tpsohel46@gmail.com"];
+const FB_COLL = { results: "matchresults", standings: "standingsoverrides", userpicks: "userpicks" };
 
+// Shared Firebase handles (the compat SDK exposes a global `firebase`).
+let _fbDb = null, _fbAuth = null;
+if (typeof firebase !== "undefined" && firebase.initializeApp) {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    _fbDb = firebase.firestore();
+    _fbAuth = firebase.auth();
+    _fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+  } catch (e) {
+    console.warn("Firebase init failed — local-only mode:", e.message || e);
+  }
+}
+const _fbServerTime = () => firebase.firestore.FieldValue.serverTimestamp();
+const _fbIso = (t) => (t && t.toDate) ? t.toDate().toISOString() : "";
+
+// ===== Results + standings sync (Firestore) =====
 const appwriteSync = (() => {
-  // Detect SDK; if absent (CDN blocked / failed), fall back to the old results.json flow.
-  if (typeof window.Appwrite === "undefined") {
-    console.warn("Appwrite SDK not loaded — running in local-only mode.");
+  if (!_fbDb) {
+    console.warn("Firebase not available — running in local-only mode.");
     return {
       available: false,
-      scheduleMatch() {},
-      scheduleStandings() {},
-      deleteMatch() {},
-      deleteStandings() {},
-      bootstrap: async () => null,
-      isConnected: () => false,
+      scheduleMatch() {}, scheduleStandings() {},
+      deleteMatch() {}, deleteStandings() {},
+      bootstrap: async () => null, isConnected: () => false,
     };
   }
+  const db = _fbDb;
+  const RESULTS = FB_COLL.results, STANDINGS = FB_COLL.standings;
 
-  const { Client, Databases, Query } = window.Appwrite;
-  const client = new Client()
-    .setEndpoint(APPWRITE_CONFIG.endpoint)
-    .setProject(APPWRITE_CONFIG.projectId);
-  const db = new Databases(client);
-
-  // matchIds contain spaces/slashes; produce a deterministic, Appwrite-safe doc ID.
-  function appwriteDocId(matchId) {
+  // matchIds contain spaces/slashes; Firestore doc IDs can't contain "/". Hash to a safe id.
+  function safeDocId(matchId) {
     let h1 = 5381, h2 = 52711;
     for (let i = 0; i < matchId.length; i++) {
       const c = matchId.charCodeAt(i);
@@ -4181,32 +4192,19 @@ const appwriteSync = (() => {
     return ("m" + h1.toString(36) + h2.toString(36)).slice(0, 36);
   }
 
-  // Track which docs are known to exist so we know whether to create vs update.
-  const knownResultDocs = new Set();
-  const knownStandingDocs = new Set();
-
-  function docToResult(doc) {
+  function docToResult(data) {
     const r = {};
-    if (doc.score1 !== null && doc.score1 !== undefined) r.score1 = doc.score1;
-    if (doc.score2 !== null && doc.score2 !== undefined) r.score2 = doc.score2;
-    if (doc.pen1 !== null && doc.pen1 !== undefined) r.pen1 = doc.pen1;
-    if (doc.pen2 !== null && doc.pen2 !== undefined) r.pen2 = doc.pen2;
-    // scorers stored as Array of strings — each element is a JSON-encoded
-    // scorer object; card entries share the attribute, tagged by a `card` field
-    if (Array.isArray(doc.scorers) && doc.scorers.length) {
-      const scorers = [], cards = [];
-      for (const s of doc.scorers) {
-        try {
-          const obj = JSON.parse(s);
-          (obj && obj.card ? cards : scorers).push(obj);
-        } catch { /* skip malformed entry */ }
-      }
-      if (scorers.length) r.scorers = scorers;
-      if (cards.length) r.cards = cards;
-    }
+    if (data.score1 !== null && data.score1 !== undefined) r.score1 = data.score1;
+    if (data.score2 !== null && data.score2 !== undefined) r.score2 = data.score2;
+    if (data.pen1 !== null && data.pen1 !== undefined) r.pen1 = data.pen1;
+    if (data.pen2 !== null && data.pen2 !== undefined) r.pen2 = data.pen2;
+    if (Array.isArray(data.scorers) && data.scorers.length) r.scorers = data.scorers;
+    if (Array.isArray(data.cards) && data.cards.length) r.cards = data.cards;
     return sanitizeResult(r);
   }
 
+  // Firestore rejects `undefined` anywhere — a JSON round-trip drops those keys.
+  const clean = (arr) => JSON.parse(JSON.stringify(arr || []));
   function resultToPayload(matchId, r) {
     return {
       matchId,
@@ -4214,282 +4212,133 @@ const appwriteSync = (() => {
       score2: r.score2 ?? null,
       pen1: r.pen1 ?? null,
       pen2: r.pen2 ?? null,
-      // Array attribute: one JSON-encoded scorer per element; card entries
-      // ride along in the same attribute, distinguished by their `card` field
-      scorers: [
-        ...(Array.isArray(r.scorers) ? r.scorers : []).filter(s => s && !s.card).map(s => JSON.stringify(s)),
-        ...(Array.isArray(r.cards) ? r.cards : []).map(c => JSON.stringify(c)),
-      ],
+      scorers: clean((Array.isArray(r.scorers) ? r.scorers : []).filter(s => s && !s.card)),
+      cards: clean(Array.isArray(r.cards) ? r.cards : []),
+      updatedAt: _fbServerTime(),
     };
   }
 
-  // Debounced pushers — coalesce rapid edits (typing in score input) into one write.
   const pendingMatchTimers = new Map();
   const pendingStandingTimers = new Map();
   const DEBOUNCE_MS = 400;
 
   async function pushMatch(matchId) {
     const r = state.results[matchId];
-    const docId = appwriteDocId(matchId);
-    if (!r) {
-      // Entry was deleted locally — propagate to Appwrite. Always attempt the
-      // delete: this client may not have seen the doc in its knownResultDocs
-      // set yet (e.g., other device added it after our last bootstrap).
-      try {
-        await db.deleteDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.resultsCollection, docId);
-        knownResultDocs.delete(docId);
-      } catch (err) {
-        if (err.code !== 404) console.warn("Appwrite delete failed:", err.message || err);
-        // 404 = doc didn't exist on server, which is fine
-      }
-      return;
-    }
-    const payload = resultToPayload(matchId, r);
-    if (knownResultDocs.has(docId)) {
-      try {
-        await db.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.resultsCollection, docId, payload);
-      } catch (err) {
-        if (err.code === 404) {
-          knownResultDocs.delete(docId);
-          return pushMatch(matchId); // retry as create
-        }
-        console.warn("Appwrite update failed:", err.message || err);
-      }
-    } else {
-      try {
-        await db.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.resultsCollection, docId, payload);
-        knownResultDocs.add(docId);
-      } catch (err) {
-        if (err.code === 409) {
-          knownResultDocs.add(docId);
-          try {
-            await db.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.resultsCollection, docId, payload);
-          } catch (e2) { console.warn("Appwrite update failed:", e2.message || e2); }
-        } else {
-          console.warn("Appwrite create failed:", err.message || err);
-        }
-      }
-    }
+    const ref = db.collection(RESULTS).doc(safeDocId(matchId));
+    try {
+      if (!r) await ref.delete();
+      else await ref.set(resultToPayload(matchId, r));
+    } catch (err) { console.warn("Firestore match write failed:", err.message || err); }
   }
 
   async function pushStandings(groupLetter) {
     const order = state.standingsOverride[groupLetter];
-    const docId = groupLetter; // safe single-char Appwrite ID
-    if (!Array.isArray(order) || order.length === 0) {
-      // Always attempt delete (don't gate on knownStandingDocs — see pushMatch comment)
-      try {
-        await db.deleteDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.standingsCollection, docId);
-        knownStandingDocs.delete(docId);
-      } catch (err) {
-        if (err.code !== 404) console.warn("Appwrite standings delete failed:", err.message || err);
-      }
-      return;
-    }
-    const payload = { groupLetter, order: JSON.stringify(order) };
-    if (knownStandingDocs.has(docId)) {
-      try {
-        await db.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.standingsCollection, docId, payload);
-      } catch (err) {
-        if (err.code === 404) {
-          knownStandingDocs.delete(docId);
-          return pushStandings(groupLetter);
-        }
-        console.warn("Appwrite standings update failed:", err.message || err);
-      }
-    } else {
-      try {
-        await db.createDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.standingsCollection, docId, payload);
-        knownStandingDocs.add(docId);
-      } catch (err) {
-        if (err.code === 409) {
-          knownStandingDocs.add(docId);
-          try {
-            await db.updateDocument(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.standingsCollection, docId, payload);
-          } catch (e2) { console.warn("Appwrite standings update failed:", e2.message || e2); }
-        } else {
-          console.warn("Appwrite standings create failed:", err.message || err);
-        }
-      }
-    }
+    const ref = db.collection(STANDINGS).doc(groupLetter);
+    try {
+      if (!Array.isArray(order) || order.length === 0) await ref.delete();
+      else await ref.set({ groupLetter, order, updatedAt: _fbServerTime() });
+    } catch (err) { console.warn("Firestore standings write failed:", err.message || err); }
   }
 
   function scheduleMatch(matchId) {
-    const existing = pendingMatchTimers.get(matchId);
-    if (existing) clearTimeout(existing);
-    pendingMatchTimers.set(matchId, setTimeout(() => {
-      pendingMatchTimers.delete(matchId);
-      pushMatch(matchId);
-    }, DEBOUNCE_MS));
+    clearTimeout(pendingMatchTimers.get(matchId));
+    pendingMatchTimers.set(matchId, setTimeout(() => { pendingMatchTimers.delete(matchId); pushMatch(matchId); }, DEBOUNCE_MS));
   }
-
   function scheduleStandings(groupLetter) {
-    const existing = pendingStandingTimers.get(groupLetter);
-    if (existing) clearTimeout(existing);
-    pendingStandingTimers.set(groupLetter, setTimeout(() => {
-      pendingStandingTimers.delete(groupLetter);
-      pushStandings(groupLetter);
-    }, DEBOUNCE_MS));
+    clearTimeout(pendingStandingTimers.get(groupLetter));
+    pendingStandingTimers.set(groupLetter, setTimeout(() => { pendingStandingTimers.delete(groupLetter); pushStandings(groupLetter); }, DEBOUNCE_MS));
   }
 
-  // Lightweight version check — 2 tiny queries (1 doc each) to read total count
-  // + newest $updatedAt per collection. If these match the cached snapshot, the
-  // client can serve from localStorage without doing a full bootstrap.
+  // Lightweight version probe: per-collection doc count + newest updatedAt, so a
+  // fresh cache can skip the full bootstrap.
+  async function collMeta(coll) {
+    let total = 0, latest = "";
+    try { total = (await db.collection(coll).count().get()).data().count; }
+    catch { total = (await db.collection(coll).get()).size; }
+    try {
+      const snap = await db.collection(coll).orderBy("updatedAt", "desc").limit(1).get();
+      if (!snap.empty) latest = _fbIso(snap.docs[0].get("updatedAt"));
+    } catch { /* updatedAt field not present yet */ }
+    return { total, latest };
+  }
   async function checkRemoteVersion() {
     try {
-      const [res, ovr] = await Promise.all([
-        db.listDocuments(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.resultsCollection,
-          [Query.orderDesc("$updatedAt"), Query.limit(1)]),
-        db.listDocuments(APPWRITE_CONFIG.databaseId, APPWRITE_CONFIG.standingsCollection,
-          [Query.orderDesc("$updatedAt"), Query.limit(1)]),
-      ]);
-      return {
-        resultsTotal: res.total,
-        overridesTotal: ovr.total,
-        latestResultUpdate: res.documents[0]?.$updatedAt || "",
-        latestStandingsUpdate: ovr.documents[0]?.$updatedAt || "",
-      };
-    } catch (err) {
-      console.warn("Appwrite version check failed:", err.message || err);
-      return null;
-    }
+      const [res, ovr] = await Promise.all([collMeta(RESULTS), collMeta(STANDINGS)]);
+      return { resultsTotal: res.total, overridesTotal: ovr.total, latestResultUpdate: res.latest, latestStandingsUpdate: ovr.latest };
+    } catch (err) { console.warn("Firestore version check failed:", err.message || err); return null; }
   }
 
   async function bootstrap() {
-    const results = {};
-    const overrides = {};
-    let maxResultUpdate = "";
-    let maxStandingsUpdate = "";
-    let resultsTotal = 0;
-    let overridesTotal = 0;
     try {
-      // Pull all results (one collection, possibly > 25 docs — paginate up to 200)
-      let offset = 0;
-      while (true) {
-        const page = await db.listDocuments(
-          APPWRITE_CONFIG.databaseId,
-          APPWRITE_CONFIG.resultsCollection,
-          [Query.limit(100), Query.offset(offset)]
-        );
-        if (offset === 0) resultsTotal = page.total;
-        for (const doc of page.documents) {
-          knownResultDocs.add(doc.$id);
-          const r = docToResult(doc);
-          if (Object.keys(r).length > 0) results[doc.matchId] = r;
-          if (doc.$updatedAt > maxResultUpdate) maxResultUpdate = doc.$updatedAt;
-        }
-        if (page.documents.length < 100) break;
-        offset += 100;
-      }
-      // Standings overrides — at most 12 docs (one per group)
-      const ovr = await db.listDocuments(
-        APPWRITE_CONFIG.databaseId,
-        APPWRITE_CONFIG.standingsCollection,
-        [Query.limit(50)]
-      );
-      overridesTotal = ovr.total;
-      for (const doc of ovr.documents) {
-        knownStandingDocs.add(doc.$id);
-        try { overrides[doc.groupLetter] = JSON.parse(doc.order); } catch { /* ignore */ }
-        if (doc.$updatedAt > maxStandingsUpdate) maxStandingsUpdate = doc.$updatedAt;
-      }
-      return {
-        results,
-        overrides,
-        meta: {
-          resultsTotal,
-          overridesTotal,
-          latestResultUpdate: maxResultUpdate,
-          latestStandingsUpdate: maxStandingsUpdate,
-        },
-      };
-    } catch (err) {
-      console.warn("Appwrite bootstrap failed:", err.message || err);
-      return null;
-    }
+      const [resSnap, ovrSnap] = await Promise.all([db.collection(RESULTS).get(), db.collection(STANDINGS).get()]);
+      const results = {}, overrides = {};
+      let maxR = "", maxS = "";
+      resSnap.forEach(doc => {
+        const data = doc.data();
+        const r = docToResult(data);
+        if (data.matchId && Object.keys(r).length > 0) results[data.matchId] = r;
+        const iso = _fbIso(data.updatedAt); if (iso > maxR) maxR = iso;
+      });
+      ovrSnap.forEach(doc => {
+        const data = doc.data();
+        if (data.groupLetter && Array.isArray(data.order)) overrides[data.groupLetter] = data.order;
+        const iso = _fbIso(data.updatedAt); if (iso > maxS) maxS = iso;
+      });
+      return { results, overrides, meta: { resultsTotal: resSnap.size, overridesTotal: ovrSnap.size, latestResultUpdate: maxR, latestStandingsUpdate: maxS } };
+    } catch (err) { console.warn("Firestore bootstrap failed:", err.message || err); return null; }
   }
 
   function subscribe() {
-    const channels = [
-      `databases.${APPWRITE_CONFIG.databaseId}.collections.${APPWRITE_CONFIG.resultsCollection}.documents`,
-      `databases.${APPWRITE_CONFIG.databaseId}.collections.${APPWRITE_CONFIG.standingsCollection}.documents`,
-    ];
-    try {
-      client.subscribe(channels, (msg) => {
-        const events = (msg.events || []).join(" ");
-        const isResults = events.includes(`.collections.${APPWRITE_CONFIG.resultsCollection}.`);
-        const isStandings = events.includes(`.collections.${APPWRITE_CONFIG.standingsCollection}.`);
-        const isDelete = events.includes(".delete");
-        const doc = msg.payload;
-        if (!doc) return;
-
-        if (isResults && doc.matchId) {
-          if (isDelete) {
-            knownResultDocs.delete(doc.$id);
-            if (!(doc.matchId in state.results)) {
-              bumpCacheVersionFromEvent("results", doc);
-              return;
-            }
-            delete state.results[doc.matchId];
-          } else {
-            knownResultDocs.add(doc.$id);
-            const newR = docToResult(doc);
-            const oldR = state.results[doc.matchId];
-            // Skip render when echo matches our local state — prevents focus-jump
-            // during admin typing and avoids unnecessary reflows.
-            if (oldR && JSON.stringify(oldR) === JSON.stringify(newR)) {
-              bumpCacheVersionFromEvent("results", doc);
-              return;
-            }
-            state.results[doc.matchId] = newR;
-          }
-          saveResults();
-          bumpCacheVersionFromEvent("results", doc);
-          rerenderActive();
-        } else if (isStandings && doc.groupLetter) {
-          if (isDelete) {
-            knownStandingDocs.delete(doc.$id);
-            if (!(doc.groupLetter in state.standingsOverride)) {
-              bumpCacheVersionFromEvent("standings", doc);
-              return;
-            }
-            delete state.standingsOverride[doc.groupLetter];
-          } else {
-            knownStandingDocs.add(doc.$id);
-            try {
-              const newOrder = JSON.parse(doc.order);
-              const oldOrder = state.standingsOverride[doc.groupLetter];
-              if (oldOrder && JSON.stringify(oldOrder) === JSON.stringify(newOrder)) {
-                bumpCacheVersionFromEvent("standings", doc);
-                return;
-              }
-              state.standingsOverride[doc.groupLetter] = newOrder;
-            } catch { return; }
-          }
-          saveStandingsOverride();
-          bumpCacheVersionFromEvent("standings", doc);
-          rerenderActive();
+    db.collection(RESULTS).onSnapshot((snap) => {
+      let changed = false;
+      snap.docChanges().forEach((ch) => {
+        const data = ch.doc.data();
+        const mid = data.matchId;
+        if (!mid) return;
+        const iso = _fbIso(data.updatedAt);
+        if (ch.type === "removed") {
+          if (mid in state.results) { delete state.results[mid]; changed = true; }
+        } else {
+          const newR = docToResult(data);
+          if (JSON.stringify(state.results[mid]) === JSON.stringify(newR)) { bumpCacheVersionFromEvent("results", { $updatedAt: iso }); return; }
+          state.results[mid] = newR; changed = true;
         }
+        bumpCacheVersionFromEvent("results", { $updatedAt: iso });
       });
-    } catch (err) {
-      console.warn("Appwrite realtime subscribe failed:", err.message || err);
-    }
+      if (changed) { saveResults(); rerenderActive(); }
+    }, (err) => console.warn("Firestore results subscribe failed:", err.message || err));
+
+    db.collection(STANDINGS).onSnapshot((snap) => {
+      let changed = false;
+      snap.docChanges().forEach((ch) => {
+        const data = ch.doc.data();
+        const g = data.groupLetter;
+        if (!g) return;
+        const iso = _fbIso(data.updatedAt);
+        if (ch.type === "removed") {
+          if (g in state.standingsOverride) { delete state.standingsOverride[g]; changed = true; }
+        } else if (Array.isArray(data.order)) {
+          if (JSON.stringify(state.standingsOverride[g]) === JSON.stringify(data.order)) { bumpCacheVersionFromEvent("standings", { $updatedAt: iso }); return; }
+          state.standingsOverride[g] = data.order; changed = true;
+        }
+        bumpCacheVersionFromEvent("standings", { $updatedAt: iso });
+      });
+      if (changed) { saveStandingsOverride(); rerenderActive(); }
+    }, (err) => console.warn("Firestore standings subscribe failed:", err.message || err));
   }
 
   return {
     available: true,
-    scheduleMatch,
-    scheduleStandings,
-    deleteMatch: (matchId) => pushMatch(matchId),
-    deleteStandings: (groupLetter) => pushStandings(groupLetter),
-    bootstrap,
-    checkRemoteVersion,
-    subscribe,
+    scheduleMatch, scheduleStandings,
+    deleteMatch: (m) => pushMatch(m),
+    deleteStandings: (g) => pushStandings(g),
+    bootstrap, checkRemoteVersion, subscribe,
   };
 })();
 
-// ===== User auth + Match Predict server storage =====
+// ===== User auth (Firebase Auth) =====
 const appwriteAuth = (() => {
-  if (typeof window.Appwrite === "undefined") {
+  if (!_fbAuth) {
     return {
       available: false,
       getCurrent: async () => null,
@@ -4498,32 +4347,33 @@ const appwriteAuth = (() => {
       logOut: async () => {},
     };
   }
-  const { Client, Account, ID } = window.Appwrite;
-  const client = new Client()
-    .setEndpoint(APPWRITE_CONFIG.endpoint)
-    .setProject(APPWRITE_CONFIG.projectId);
-  const account = new Account(client);
+  const auth = _fbAuth;
+  const toUser = (u) => u ? { id: u.uid, name: u.displayName || u.email, email: u.email, labels: [] } : null;
 
   async function getCurrent() {
-    try {
-      const u = await account.get();
-      return { id: u.$id, name: u.name || u.email, email: u.email, labels: u.labels || [] };
-    } catch { return null; }
+    const u = auth.currentUser || await new Promise((resolve) => {
+      const unsub = auth.onAuthStateChanged((usr) => { unsub(); resolve(usr); }, () => resolve(null));
+    });
+    return toUser(u);
   }
   async function signUp(email, password, name) {
-    await account.create(ID.unique(), email, password, name);
-    await account.createEmailPasswordSession(email, password);
-    return getCurrent();
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    if (name && cred.user) { try { await cred.user.updateProfile({ displayName: name }); } catch { /* non-fatal */ } }
+    return toUser(auth.currentUser);
   }
   async function logIn(email, password) {
-    await account.createEmailPasswordSession(email, password);
-    return getCurrent();
+    await auth.signInWithEmailAndPassword(email, password);
+    return toUser(auth.currentUser);
   }
-  async function logOut() {
-    try { await account.deleteSession("current"); } catch { /* ignore */ }
-  }
+  async function logOut() { try { await auth.signOut(); } catch { /* ignore */ } }
   async function updatePassword(newPassword, oldPassword) {
-    await account.updatePassword(newPassword, oldPassword);
+    const u = auth.currentUser;
+    if (!u) throw new Error("Not signed in");
+    try {
+      const cred = firebase.auth.EmailAuthProvider.credential(u.email, oldPassword);
+      await u.reauthenticateWithCredential(cred);
+    } catch { throw new Error("Current password is incorrect"); }
+    await u.updatePassword(newPassword);
   }
   return { available: true, getCurrent, signUp, logIn, logOut, updatePassword };
 })();
@@ -4563,168 +4413,85 @@ function decodeMatchPicks(str) {
   return out;
 }
 
-// ===== User picks server sync =====
+// ===== User picks server sync (Firestore) =====
 const userPicksSync = (() => {
-  if (typeof window.Appwrite === "undefined") {
-    return {
-      available: false,
-      saveOwn: async () => {},
-      fetchOwn: async () => null,
-      fetchAll: async () => [],
-      subscribe: () => {},
-    };
+  if (!_fbDb) {
+    return { available: false, saveOwn: async () => {}, fetchOwn: async () => null, fetchAll: async () => [], subscribe: () => {} };
   }
-  const { Client, Databases, Query, Permission, Role } = window.Appwrite;
-  const client = new Client()
-    .setEndpoint(APPWRITE_CONFIG.endpoint)
-    .setProject(APPWRITE_CONFIG.projectId);
-  const db = new Databases(client);
-  const COLL = APPWRITE_CONFIG.userPicksCollection;
-  const DB = APPWRITE_CONFIG.databaseId;
-
-  let knownOwnDocId = null;       // doc ID for the logged-in user's picks doc
+  const db = _fbDb;
+  const COLL = FB_COLL.userpicks;
   let pendingSaveTimer = null;
   const SAVE_DEBOUNCE_MS = 600;
+
+  const rowFromDoc = (data) => ({
+    userId: data.userId,
+    userName: data.userName,
+    picks: decodeMatchPicks(data.picks || ""),
+    firstSubmittedAt: data.firstSubmittedAt || "",
+    totalPicks: data.totalPicks || 0,
+  });
 
   async function saveOwn() {
     if (!state.currentUser) return;
     if (pendingSaveTimer) clearTimeout(pendingSaveTimer);
-    pendingSaveTimer = setTimeout(() => doSaveOwn().catch(err =>
-      console.warn("User picks save failed:", err.message || err)
-    ), SAVE_DEBOUNCE_MS);
+    pendingSaveTimer = setTimeout(() => doSaveOwn().catch(err => console.warn("User picks save failed:", err.message || err)), SAVE_DEBOUNCE_MS);
   }
-
   async function doSaveOwn() {
     if (!state.currentUser) return;
     const uid = state.currentUser.id;
+    if (!state.currentUser.firstSubmittedAt) state.currentUser.firstSubmittedAt = new Date().toISOString();
     const payload = {
       userId: uid,
       userName: state.currentUser.name,
       picks: encodeMatchPicks(state.matchPicks),
-      firstSubmittedAt: state.currentUser.firstSubmittedAt || new Date().toISOString(),
+      firstSubmittedAt: state.currentUser.firstSubmittedAt,
       totalPicks: Object.keys(state.matchPicks).filter(id => {
         const p = state.matchPicks[id];
         return p && p.score1 !== undefined && p.score2 !== undefined;
       }).length,
+      updatedAt: _fbServerTime(),
     };
-    const perms = [
-      Permission.read(Role.any()),
-      Permission.update(Role.user(uid)),
-      Permission.delete(Role.user(uid)),
-    ];
-    if (knownOwnDocId) {
-      try {
-        await db.updateDocument(DB, COLL, knownOwnDocId, payload);
-        return;
-      } catch (err) {
-        if (err.code !== 404) {
-          console.warn("User picks update failed:", err.message || err);
-          return;
-        }
-        knownOwnDocId = null; // fall through to create
-      }
-    }
-    // Try to find existing doc for this user first
-    try {
-      const found = await db.listDocuments(DB, COLL, [Query.equal("userId", uid), Query.limit(1)]);
-      if (found.documents.length > 0) {
-        knownOwnDocId = found.documents[0].$id;
-        await db.updateDocument(DB, COLL, knownOwnDocId, payload);
-        return;
-      }
-    } catch (err) {
-      console.warn("User picks lookup failed:", err.message || err);
-    }
-    // Create new doc
-    try {
-      const created = await db.createDocument(DB, COLL, window.Appwrite.ID.unique(), payload, perms);
-      knownOwnDocId = created.$id;
-      // Remember firstSubmittedAt so subsequent saves keep the original time
-      state.currentUser.firstSubmittedAt = payload.firstSubmittedAt;
-    } catch (err) {
-      console.warn("User picks create failed:", err.message || err);
-    }
+    // doc id = uid; Firestore rules require data.userId == auth.uid for write.
+    await db.collection(COLL).doc(uid).set(payload, { merge: true });
   }
 
   async function fetchAll() {
     const all = [];
     try {
-      let offset = 0;
-      while (true) {
-        const page = await db.listDocuments(DB, COLL, [Query.limit(100), Query.offset(offset)]);
-        for (const doc of page.documents) {
-          all.push({
-            userId: doc.userId,
-            userName: doc.userName,
-            picks: decodeMatchPicks(doc.picks || ""),
-            firstSubmittedAt: doc.firstSubmittedAt || doc.$createdAt,
-            totalPicks: doc.totalPicks || 0,
-          });
-          if (state.currentUser && doc.userId === state.currentUser.id) {
-            knownOwnDocId = doc.$id;
-            state.currentUser.firstSubmittedAt = doc.firstSubmittedAt || doc.$createdAt;
-          }
+      const snap = await db.collection(COLL).get();
+      snap.forEach(doc => {
+        const row = rowFromDoc(doc.data());
+        all.push(row);
+        if (state.currentUser && row.userId === state.currentUser.id && row.firstSubmittedAt) {
+          state.currentUser.firstSubmittedAt = row.firstSubmittedAt;
         }
-        if (page.documents.length < 100) break;
-        offset += 100;
-      }
-    } catch (err) {
-      console.warn("User picks fetchAll failed:", err.message || err);
-    }
+      });
+    } catch (err) { console.warn("User picks fetchAll failed:", err.message || err); }
     return all;
   }
 
-  // Reads only the logged-in user's own document (1 read instead of 100+).
-  // Sets knownOwnDocId so subsequent saveOwn() calls can update directly.
   async function fetchOwn() {
     if (!state.currentUser) return null;
     try {
-      const uid = state.currentUser.id;
-      const page = await db.listDocuments(DB, COLL, [Query.equal("userId", uid), Query.limit(1)]);
-      if (!page.documents.length) return null;
-      const doc = page.documents[0];
-      knownOwnDocId = doc.$id;
-      if (doc.firstSubmittedAt) state.currentUser.firstSubmittedAt = doc.firstSubmittedAt;
-      return {
-        userId: doc.userId,
-        userName: doc.userName,
-        picks: decodeMatchPicks(doc.picks || ""),
-        firstSubmittedAt: doc.firstSubmittedAt || doc.$createdAt,
-        totalPicks: doc.totalPicks || 0,
-      };
-    } catch (err) {
-      console.warn("User picks fetchOwn failed:", err.message || err);
-      return null;
-    }
+      const doc = await db.collection(COLL).doc(state.currentUser.id).get();
+      if (!doc.exists) return null;
+      const row = rowFromDoc(doc.data());
+      if (row.firstSubmittedAt) state.currentUser.firstSubmittedAt = row.firstSubmittedAt;
+      return row;
+    } catch (err) { console.warn("User picks fetchOwn failed:", err.message || err); return null; }
   }
 
   function subscribe() {
-    try {
-      client.subscribe(`databases.${DB}.collections.${COLL}.documents`, (msg) => {
-        const doc = msg.payload;
-        if (!doc) return;
-        const events = (msg.events || []).join(" ");
-        const isDelete = events.includes(".delete");
-        const idx = state.leaderboardUsers.findIndex(u => u.userId === doc.userId);
-        if (isDelete) {
-          if (idx >= 0) state.leaderboardUsers.splice(idx, 1);
-        } else {
-          const row = {
-            userId: doc.userId,
-            userName: doc.userName,
-            picks: decodeMatchPicks(doc.picks || ""),
-            firstSubmittedAt: doc.firstSubmittedAt || doc.$createdAt,
-            totalPicks: doc.totalPicks || 0,
-          };
-          if (idx >= 0) state.leaderboardUsers[idx] = row;
-          else state.leaderboardUsers.push(row);
-        }
-        if (state.view === "picks") renderPicks();
-        else if (state.view === "leaderboard") renderLeaderboardView();
+    db.collection(COLL).onSnapshot((snap) => {
+      snap.docChanges().forEach((ch) => {
+        const data = ch.doc.data();
+        const idx = state.leaderboardUsers.findIndex(u => u.userId === data.userId);
+        if (ch.type === "removed") { if (idx >= 0) state.leaderboardUsers.splice(idx, 1); }
+        else { const row = rowFromDoc(data); if (idx >= 0) state.leaderboardUsers[idx] = row; else state.leaderboardUsers.push(row); }
       });
-    } catch (err) {
-      console.warn("User picks subscribe failed:", err.message || err);
-    }
+      if (state.view === "picks") renderPicks();
+      else if (state.view === "leaderboard") renderLeaderboardView();
+    }, (err) => console.warn("User picks subscribe failed:", err.message || err));
   }
 
   return { available: true, saveOwn, fetchOwn, fetchAll, subscribe };
