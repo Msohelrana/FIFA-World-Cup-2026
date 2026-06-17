@@ -2836,12 +2836,11 @@ function renderLeaderboardView() {
     spinner.className = "picks-lb-loading";
     spinner.textContent = "Loading leaderboard…";
     view.appendChild(spinner);
-    userPicksSync.fetchAll().then(all => {
-      state.leaderboardUsers = all || [];
-      state.leaderboardLoaded = true;
-      userPicksSync.subscribe();
-      if (state.view === "leaderboard") renderLeaderboardView();
-    });
+    state.leaderboardLoaded = true;
+    // Single read path: the realtime subscription's first snapshot loads every
+    // user's picks and re-renders, then keeps the board live — no separate
+    // fetchAll() (that was a duplicate full-collection read).
+    userPicksSync.subscribe();
     return;
   }
 
@@ -4158,6 +4157,12 @@ if (typeof firebase !== "undefined" && firebase.initializeApp) {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     _fbDb = firebase.firestore();
+    // Offline persistence (IndexedDB): onSnapshot then serves from the local
+    // cache and pulls only *changed* docs from the server, so repeat loads cost
+    // ~no reads. Must run before any other Firestore use. Rejects harmlessly if
+    // multiple tabs are open or the browser doesn't support it.
+    try { _fbDb.enablePersistence({ synchronizeTabs: true }).catch(() => {}); }
+    catch { /* persistence unsupported — falls back to network reads */ }
     _fbAuth = firebase.auth();
     _fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
   } catch (e) {
@@ -4289,7 +4294,17 @@ const appwriteSync = (() => {
   }
 
   function subscribe() {
+    let seededResults = false, seededStandings = false;
     db.collection(RESULTS).onSnapshot((snap) => {
+      // First *server* load doubles as the seed: if the server is empty but this
+      // (admin) device has local results, upload them once. Wait for a non-cache
+      // snapshot so the offline cache's empty first emit doesn't trigger it.
+      if (!seededResults && !snap.metadata.fromCache) {
+        seededResults = true;
+        if (snap.empty && Object.keys(state.results).length > 0) {
+          for (const mid of Object.keys(state.results)) scheduleMatch(mid);
+        }
+      }
       let changed = false;
       snap.docChanges().forEach((ch) => {
         const data = ch.doc.data();
@@ -4309,6 +4324,12 @@ const appwriteSync = (() => {
     }, (err) => console.warn("Firestore results subscribe failed:", err.message || err));
 
     db.collection(STANDINGS).onSnapshot((snap) => {
+      if (!seededStandings && !snap.metadata.fromCache) {
+        seededStandings = true;
+        if (snap.empty && Object.keys(state.standingsOverride).length > 0) {
+          for (const g of Object.keys(state.standingsOverride)) scheduleStandings(g);
+        }
+      }
       let changed = false;
       snap.docChanges().forEach((ch) => {
         const data = ch.doc.data();
@@ -4851,47 +4872,11 @@ setInterval(tickCountdowns, 1000);
 // If the cached snapshot matches what's on Appwrite, skip the full bootstrap
 // entirely — saves ~100 doc reads per page load on the free tier.
 if (appwriteSync.available) {
-  // Always subscribe to realtime so any admin change reaches us live.
+  // A single realtime subscription is the loader: its first onSnapshot fills
+  // results + standings from Firestore (served from the offline cache on repeat
+  // loads, so ~no reads), keeps them live, and seeds the server if it's empty.
+  // No separate bootstrap/version-check — that was redundant double-reading.
   appwriteSync.subscribe();
-
-  const localHasData = Object.keys(state.results).length > 0
-    || Object.keys(state.standingsOverride).length > 0;
-
-  appwriteSync.checkRemoteVersion().then(async (remote) => {
-    if (!remote) return; // network/CORS issue — fall back silently to cache
-
-    const remoteHasData = remote.resultsTotal > 0 || remote.overridesTotal > 0;
-
-    // Case 1: Appwrite empty + local has data → first ever run, seed Appwrite
-    if (!remoteHasData && localHasData) {
-      for (const matchId of Object.keys(state.results)) appwriteSync.scheduleMatch(matchId);
-      for (const letter of Object.keys(state.standingsOverride)) appwriteSync.scheduleStandings(letter);
-      return;
-    }
-
-    // Case 2: Both empty → nothing to do
-    if (!remoteHasData && !localHasData) {
-      setCacheVersion(remote);
-      return;
-    }
-
-    // Case 3: cached snapshot is fresh → skip the expensive bootstrap
-    const localVersion = getCacheVersion();
-    if (!isCacheStale(localVersion, remote)) {
-      return;
-    }
-
-    // Case 4: cache is stale or missing → do a full bootstrap
-    const data = await appwriteSync.bootstrap();
-    if (data) {
-      state.results = data.results;
-      state.standingsOverride = data.overrides;
-      saveResults();
-      saveStandingsOverride();
-      setCacheVersion(data.meta);
-      rerenderActive();
-    }
-  });
 } else {
   loadLatestFromServer().then(payload => {
     if (payload && !payload.__error && Object.keys(payload.results).length > 0) {
