@@ -4846,6 +4846,7 @@ function computeLeaderboard() {
     || b.outcomeCount - a.outcomeCount
     || b.gdCount - a.gdCount
     || b.pkCount - a.pkCount
+    || (b.accPct ?? -1) - (a.accPct ?? -1)
     || (a.firstSubmittedAt || "").localeCompare(b.firstSubmittedAt || "")
     || a.userName.localeCompare(b.userName)
   );
@@ -4853,7 +4854,7 @@ function computeLeaderboard() {
   let lastKey = null;
   let lastRank = 0;
   rows.forEach((r, i) => {
-    const key = `${r.total}|${r.exactCount}|${r.outcomeCount}|${r.gdCount}|${r.pkCount}`;
+    const key = `${r.total}|${r.exactCount}|${r.outcomeCount}|${r.gdCount}|${r.pkCount}|${r.accPct}`;
     if (key !== lastKey) { lastRank = i + 1; lastKey = key; }
     r.rank = lastRank;
   });
