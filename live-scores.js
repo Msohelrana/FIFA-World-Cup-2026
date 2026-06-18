@@ -84,13 +84,13 @@ const liveScores = (() => {
       : null;
   }
 
-  // "Winner C" → "1C", "Runner-up A" → "2A", "3rd A/B/C/D/F" → "3ABCDF"
+  // "C1" → "1C", "A2" → "2A", "3rd A/B/C/D/F" → "3ABCDF"
   // (FIFA's PlaceHolderA/B codes for not-yet-decided knockout slots)
   function placeholderCode(label) {
     if (!label) return null;
-    let m = /^Winner ([A-L])$/.exec(label);
+    let m = /^([A-L])1$/.exec(label);
     if (m) return "1" + m[1];
-    m = /^Runner-up ([A-L])$/.exec(label);
+    m = /^([A-L])2$/.exec(label);
     if (m) return "2" + m[1];
     m = /^3rd ([A-Z/]+)$/.exec(label);
     if (m) return "3" + m[1].replace(/\//g, "");

@@ -61,13 +61,13 @@ const FIXTURES = [
   { stage: "group", group: "A", date: "2026-06-18", time: "12:00 ET", team1: "Czechia", team2: "South Africa", venue: "Atlanta" },
   { stage: "group", group: "B", date: "2026-06-18", time: "15:00 ET", team1: "Switzerland", team2: "Bosnia and Herzegovina", venue: "Inglewood, CA" },
   { stage: "group", group: "B", date: "2026-06-18", time: "18:00 ET", team1: "Canada", team2: "Qatar", venue: "Vancouver, Canada" },
-  { stage: "group", group: "A", date: "2026-06-18", time: "23:00 ET", team1: "Mexico", team2: "South Korea", venue: "Zapopan, Mexico" },
+  { stage: "group", group: "A", date: "2026-06-18", time: "21:00 ET", team1: "Mexico", team2: "South Korea", venue: "Zapopan, Mexico" },
 
   // June 19
   { stage: "group", group: "D", date: "2026-06-19", time: "15:00 ET", team1: "United States", team2: "Australia", venue: "Seattle" },
   { stage: "group", group: "C", date: "2026-06-19", time: "18:00 ET", team1: "Scotland", team2: "Morocco", venue: "Foxborough, MA" },
-  { stage: "group", group: "C", date: "2026-06-19", time: "21:00 ET", team1: "Brazil", team2: "Haiti", venue: "Philadelphia" },
-  { stage: "group", group: "D", date: "2026-06-20", time: "00:00 ET", team1: "Türkiye", team2: "Paraguay", venue: "Santa Clara, CA" },
+  { stage: "group", group: "C", date: "2026-06-19", time: "20:30 ET", team1: "Brazil", team2: "Haiti", venue: "Philadelphia" },
+  { stage: "group", group: "D", date: "2026-06-19", time: "23:00 ET", team1: "Türkiye", team2: "Paraguay", venue: "Santa Clara, CA" },
 
   // June 20
   { stage: "group", group: "F", date: "2026-06-20", time: "13:00 ET", team1: "Netherlands", team2: "Sweden", venue: "Houston" },
@@ -126,61 +126,61 @@ const FIXTURES = [
   { stage: "group", group: "J", date: "2026-06-27", time: "22:00 ET", team1: "Jordan", team2: "Argentina", venue: "Arlington, TX" },
 
   // ===== ROUND OF 32 =====
-  { stage: "r32", group: null, date: "2026-06-28", time: "15:00 ET", team1: "Runner-up A", team2: "Runner-up B", venue: "Inglewood, CA" },
-  { stage: "r32", group: null, date: "2026-06-29", time: "13:00 ET", team1: "Winner C", team2: "Runner-up F", venue: "Houston" },
-  { stage: "r32", group: null, date: "2026-06-29", time: "16:30 ET", team1: "Winner E", team2: "3rd A/B/C/D/F", venue: "Foxborough, MA" },
-  { stage: "r32", group: null, date: "2026-06-29", time: "21:00 ET", team1: "Winner F", team2: "Runner-up C", venue: "Guadalupe, Mexico" },
-  { stage: "r32", group: null, date: "2026-06-30", time: "13:00 ET", team1: "Runner-up E", team2: "Runner-up I", venue: "Arlington, TX" },
-  { stage: "r32", group: null, date: "2026-06-30", time: "17:00 ET", team1: "Winner I", team2: "3rd C/D/F/G/H", venue: "East Rutherford, NJ" },
-  { stage: "r32", group: null, date: "2026-06-30", time: "21:00 ET", team1: "Winner A", team2: "3rd C/E/F/H/I", venue: "Mexico City" },
-  { stage: "r32", group: null, date: "2026-07-01", time: "12:00 ET", team1: "Winner L", team2: "3rd E/H/I/J/K", venue: "Atlanta" },
-  { stage: "r32", group: null, date: "2026-07-01", time: "16:00 ET", team1: "Winner G", team2: "3rd A/E/H/I/J", venue: "Seattle" },
-  { stage: "r32", group: null, date: "2026-07-01", time: "20:00 ET", team1: "Winner D", team2: "3rd B/E/F/I/J", venue: "Santa Clara, CA" },
-  { stage: "r32", group: null, date: "2026-07-02", time: "15:00 ET", team1: "Winner H", team2: "Runner-up J", venue: "Inglewood, CA" },
-  { stage: "r32", group: null, date: "2026-07-02", time: "19:00 ET", team1: "Runner-up K", team2: "Runner-up L", venue: "Toronto" },
-  { stage: "r32", group: null, date: "2026-07-02", time: "23:00 ET", team1: "Winner B", team2: "3rd E/F/G/I/J", venue: "Vancouver, Canada" },
-  { stage: "r32", group: null, date: "2026-07-03", time: "14:00 ET", team1: "Runner-up D", team2: "Runner-up G", venue: "Arlington, TX" },
-  { stage: "r32", group: null, date: "2026-07-03", time: "18:00 ET", team1: "Winner J", team2: "Runner-up H", venue: "Miami Gardens, FL" },
-  { stage: "r32", group: null, date: "2026-07-03", time: "21:30 ET", team1: "Winner K", team2: "3rd D/E/I/J/L", venue: "Kansas City, MO" },
+  { stage: "r32", group: null, date: "2026-06-28", time: "15:00 ET", team1: "A2", team2: "B2", venue: "Inglewood, CA" },
+  { stage: "r32", group: null, date: "2026-06-29", time: "13:00 ET", team1: "C1", team2: "F2", venue: "Houston" },
+  { stage: "r32", group: null, date: "2026-06-29", time: "16:30 ET", team1: "E1", team2: "3rd A/B/C/D/F", venue: "Foxborough, MA" },
+  { stage: "r32", group: null, date: "2026-06-29", time: "21:00 ET", team1: "F1", team2: "C2", venue: "Guadalupe, Mexico" },
+  { stage: "r32", group: null, date: "2026-06-30", time: "13:00 ET", team1: "E2", team2: "I2", venue: "Arlington, TX" },
+  { stage: "r32", group: null, date: "2026-06-30", time: "17:00 ET", team1: "I1", team2: "3rd C/D/F/G/H", venue: "East Rutherford, NJ" },
+  { stage: "r32", group: null, date: "2026-06-30", time: "21:00 ET", team1: "A1", team2: "3rd C/E/F/H/I", venue: "Mexico City" },
+  { stage: "r32", group: null, date: "2026-07-01", time: "12:00 ET", team1: "L1", team2: "3rd E/H/I/J/K", venue: "Atlanta" },
+  { stage: "r32", group: null, date: "2026-07-01", time: "16:00 ET", team1: "G1", team2: "3rd A/E/H/I/J", venue: "Seattle" },
+  { stage: "r32", group: null, date: "2026-07-01", time: "20:00 ET", team1: "D1", team2: "3rd B/E/F/I/J", venue: "Santa Clara, CA" },
+  { stage: "r32", group: null, date: "2026-07-02", time: "15:00 ET", team1: "H1", team2: "J2", venue: "Inglewood, CA" },
+  { stage: "r32", group: null, date: "2026-07-02", time: "19:00 ET", team1: "K2", team2: "L2", venue: "Toronto" },
+  { stage: "r32", group: null, date: "2026-07-02", time: "23:00 ET", team1: "B1", team2: "3rd E/F/G/I/J", venue: "Vancouver, Canada" },
+  { stage: "r32", group: null, date: "2026-07-03", time: "14:00 ET", team1: "D2", team2: "G2", venue: "Arlington, TX" },
+  { stage: "r32", group: null, date: "2026-07-03", time: "18:00 ET", team1: "J1", team2: "H2", venue: "Miami Gardens, FL" },
+  { stage: "r32", group: null, date: "2026-07-03", time: "21:30 ET", team1: "K1", team2: "3rd D/E/I/J/L", venue: "Kansas City, MO" },
 
   // ===== ROUND OF 16 =====
   // R16 cross-bracket is per FIFA's official 2026 structure (Wikipedia: 2026 World Cup knockout stage).
   // M90 (Houston):       W M73 vs W M75 = r32[0]+r32[3]
-  { stage: "r16", group: null, date: "2026-07-04", time: "13:00 ET", team1: "Winner of R32 M1",  team2: "Winner of R32 M4",  bracket: { team1: { stage: "r32", index: 0,  role: "winner" }, team2: { stage: "r32", index: 3,  role: "winner" } }, venue: "Houston" },
+  { stage: "r16", group: null, date: "2026-07-04", time: "13:00 ET", team1: "W73", team2: "W75", bracket: { team1: { stage: "r32", index: 0, role: "winner" }, team2: { stage: "r32", index: 2, role: "winner" } }, venue: "Houston" },
   // M89 (Philadelphia):  W M74 vs W M77 = r32[2]+r32[5]
-  { stage: "r16", group: null, date: "2026-07-04", time: "17:00 ET", team1: "Winner of R32 M3",  team2: "Winner of R32 M6",  bracket: { team1: { stage: "r32", index: 2,  role: "winner" }, team2: { stage: "r32", index: 5,  role: "winner" } }, venue: "Philadelphia" },
+  { stage: "r16", group: null, date: "2026-07-04", time: "17:00 ET", team1: "W74", team2: "W77", bracket: { team1: { stage: "r32", index: 1, role: "winner" }, team2: { stage: "r32", index: 4, role: "winner" } }, venue: "Philadelphia" },
   // M91 (East Ruth.):    W M76 vs W M78 = r32[1]+r32[4]
-  { stage: "r16", group: null, date: "2026-07-05", time: "16:00 ET", team1: "Winner of R32 M2",  team2: "Winner of R32 M5",  bracket: { team1: { stage: "r32", index: 1,  role: "winner" }, team2: { stage: "r32", index: 4,  role: "winner" } }, venue: "East Rutherford, NJ" },
+  { stage: "r16", group: null, date: "2026-07-05", time: "16:00 ET", team1: "W76", team2: "W78", bracket: { team1: { stage: "r32", index: 3, role: "winner" }, team2: { stage: "r32", index: 5, role: "winner" } }, venue: "East Rutherford, NJ" },
   // M92 (Mexico City):   W M79 vs W M80 = r32[6]+r32[7]
-  { stage: "r16", group: null, date: "2026-07-05", time: "20:00 ET", team1: "Winner of R32 M7",  team2: "Winner of R32 M8",  bracket: { team1: { stage: "r32", index: 6,  role: "winner" }, team2: { stage: "r32", index: 7,  role: "winner" } }, venue: "Mexico City" },
+  { stage: "r16", group: null, date: "2026-07-05", time: "20:00 ET", team1: "W79", team2: "W80", bracket: { team1: { stage: "r32", index: 6, role: "winner" }, team2: { stage: "r32", index: 7, role: "winner" } }, venue: "Mexico City" },
   // M93 (Arlington):     W M83 vs W M84 = r32[11]+r32[10]
-  { stage: "r16", group: null, date: "2026-07-06", time: "15:00 ET", team1: "Winner of R32 M12", team2: "Winner of R32 M11", bracket: { team1: { stage: "r32", index: 11, role: "winner" }, team2: { stage: "r32", index: 10, role: "winner" } }, venue: "Arlington, TX" },
+  { stage: "r16", group: null, date: "2026-07-06", time: "15:00 ET", team1: "W83", team2: "W84", bracket: { team1: { stage: "r32", index: 10, role: "winner" }, team2: { stage: "r32", index: 11, role: "winner" } }, venue: "Arlington, TX" },
   // M94 (Seattle):       W M81 vs W M82 = r32[9]+r32[8]
-  { stage: "r16", group: null, date: "2026-07-06", time: "17:00 ET", team1: "Winner of R32 M10", team2: "Winner of R32 M9",  bracket: { team1: { stage: "r32", index: 9,  role: "winner" }, team2: { stage: "r32", index: 8,  role: "winner" } }, venue: "Seattle" },
+  { stage: "r16", group: null, date: "2026-07-06", time: "20:00 ET", team1: "W81", team2: "W82", bracket: { team1: { stage: "r32", index: 8, role: "winner" }, team2: { stage: "r32", index: 9, role: "winner" } }, venue: "Seattle" },
   // M95 (Atlanta):       W M86 vs W M88 = r32[14]+r32[13]
-  { stage: "r16", group: null, date: "2026-07-07", time: "12:00 ET", team1: "Winner of R32 M15", team2: "Winner of R32 M14", bracket: { team1: { stage: "r32", index: 14, role: "winner" }, team2: { stage: "r32", index: 13, role: "winner" } }, venue: "Atlanta" },
+  { stage: "r16", group: null, date: "2026-07-07", time: "12:00 ET", team1: "W86", team2: "W88", bracket: { team1: { stage: "r32", index: 13, role: "winner" }, team2: { stage: "r32", index: 15, role: "winner" } }, venue: "Atlanta" },
   // M96 (Vancouver):     W M85 vs W M87 = r32[12]+r32[15]
-  { stage: "r16", group: null, date: "2026-07-07", time: "16:00 ET", team1: "Winner of R32 M13", team2: "Winner of R32 M16", bracket: { team1: { stage: "r32", index: 12, role: "winner" }, team2: { stage: "r32", index: 15, role: "winner" } }, venue: "Vancouver, Canada" },
+  { stage: "r16", group: null, date: "2026-07-07", time: "16:00 ET", team1: "W85", team2: "W87", bracket: { team1: { stage: "r32", index: 12, role: "winner" }, team2: { stage: "r32", index: 14, role: "winner" } }, venue: "Vancouver, Canada" },
 
   // ===== QUARTERFINALS =====
   // M97 (Foxborough):   W M89 vs W M90 = r16[1]+r16[0]
-  { stage: "qf", group: null, date: "2026-07-09", time: "16:00 ET", team1: "Winner of R16 M2", team2: "Winner of R16 M1", bracket: { team1: { stage: "r16", index: 1, role: "winner" }, team2: { stage: "r16", index: 0, role: "winner" } }, venue: "Foxborough, MA" },
+  { stage: "qf", group: null, date: "2026-07-09", time: "16:00 ET", team1: "W89", team2: "W90", bracket: { team1: { stage: "r16", index: 0, role: "winner" }, team2: { stage: "r16", index: 1, role: "winner" } }, venue: "Foxborough, MA" },
   // M98 (Inglewood):    W M93 vs W M94 = r16[4]+r16[5]
-  { stage: "qf", group: null, date: "2026-07-10", time: "15:00 ET", team1: "Winner of R16 M5", team2: "Winner of R16 M6", bracket: { team1: { stage: "r16", index: 4, role: "winner" }, team2: { stage: "r16", index: 5, role: "winner" } }, venue: "Inglewood, CA" },
+  { stage: "qf", group: null, date: "2026-07-10", time: "15:00 ET", team1: "W93", team2: "W94", bracket: { team1: { stage: "r16", index: 4, role: "winner" }, team2: { stage: "r16", index: 5, role: "winner" } }, venue: "Inglewood, CA" },
   // M99 (Miami):        W M91 vs W M92 = r16[2]+r16[3]
-  { stage: "qf", group: null, date: "2026-07-11", time: "17:00 ET", team1: "Winner of R16 M3", team2: "Winner of R16 M4", bracket: { team1: { stage: "r16", index: 2, role: "winner" }, team2: { stage: "r16", index: 3, role: "winner" } }, venue: "Miami Gardens, FL" },
+  { stage: "qf", group: null, date: "2026-07-11", time: "17:00 ET", team1: "W91", team2: "W92", bracket: { team1: { stage: "r16", index: 2, role: "winner" }, team2: { stage: "r16", index: 3, role: "winner" } }, venue: "Miami Gardens, FL" },
   // M100 (Kansas City): W M95 vs W M96 = r16[6]+r16[7]
-  { stage: "qf", group: null, date: "2026-07-11", time: "21:00 ET", team1: "Winner of R16 M7", team2: "Winner of R16 M8", bracket: { team1: { stage: "r16", index: 6, role: "winner" }, team2: { stage: "r16", index: 7, role: "winner" } }, venue: "Kansas City, MO" },
+  { stage: "qf", group: null, date: "2026-07-11", time: "21:00 ET", team1: "W95", team2: "W96", bracket: { team1: { stage: "r16", index: 6, role: "winner" }, team2: { stage: "r16", index: 7, role: "winner" } }, venue: "Kansas City, MO" },
 
   // ===== SEMIFINALS =====
-  { stage: "sf", group: null, date: "2026-07-14", time: "15:00 ET", team1: "Winner of QF1", team2: "Winner of QF2", bracket: { team1: { stage: "qf", index: 0, role: "winner" }, team2: { stage: "qf", index: 1, role: "winner" } }, venue: "Arlington, TX" },
-  { stage: "sf", group: null, date: "2026-07-15", time: "15:00 ET", team1: "Winner of QF3", team2: "Winner of QF4", bracket: { team1: { stage: "qf", index: 2, role: "winner" }, team2: { stage: "qf", index: 3, role: "winner" } }, venue: "Atlanta" },
+  { stage: "sf", group: null, date: "2026-07-14", time: "15:00 ET", team1: "W97", team2: "W98", bracket: { team1: { stage: "qf", index: 0, role: "winner" }, team2: { stage: "qf", index: 1, role: "winner" } }, venue: "Arlington, TX" },
+  { stage: "sf", group: null, date: "2026-07-15", time: "15:00 ET", team1: "W99", team2: "W100", bracket: { team1: { stage: "qf", index: 2, role: "winner" }, team2: { stage: "qf", index: 3, role: "winner" } }, venue: "Atlanta" },
 
   // ===== THIRD-PLACE =====
-  { stage: "third", group: null, date: "2026-07-18", time: "17:00 ET", team1: "Loser of SF1", team2: "Loser of SF2", bracket: { team1: { stage: "sf", index: 0, role: "loser" }, team2: { stage: "sf", index: 1, role: "loser" } }, venue: "Miami Gardens, FL" },
+  { stage: "third", group: null, date: "2026-07-18", time: "17:00 ET", team1: "RU101", team2: "RU102", bracket: { team1: { stage: "sf", index: 0, role: "loser" }, team2: { stage: "sf", index: 1, role: "loser" } }, venue: "Miami Gardens, FL" },
 
   // ===== FINAL =====
-  { stage: "final", group: null, date: "2026-07-19", time: "15:00 ET", team1: "Winner of SF1", team2: "Winner of SF2", bracket: { team1: { stage: "sf", index: 0, role: "winner" }, team2: { stage: "sf", index: 1, role: "winner" } }, venue: "East Rutherford, NJ" },
+  { stage: "final", group: null, date: "2026-07-19", time: "15:00 ET", team1: "W101", team2: "W102", bracket: { team1: { stage: "sf", index: 0, role: "winner" }, team2: { stage: "sf", index: 1, role: "winner" } }, venue: "East Rutherford, NJ" },
 ];
 
 // ISO 3166-1 alpha-2 codes used for flagcdn.com image URLs.
@@ -238,7 +238,7 @@ const TEAM_FLAGS = {
 
 const SPECIAL_FLAG_URLS = {
   "scotland": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/10/Flag_of_Scotland.svg/40px-Flag_of_Scotland.svg.png",
-  "england":  "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Flag_of_England.svg/40px-Flag_of_England.svg.png",
+  "england": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/Flag_of_England.svg/40px-Flag_of_England.svg.png",
 };
 
 const STAGE_LABELS = {

@@ -1299,7 +1299,7 @@ function buildCurrentBracketKo() {
       for (const t of top8) groupToTeam[t.group] = t;
       for (const m of FIXTURES) {
         if (m.stage !== "r32") continue;
-        const winMatch = m.team1.match(/^Winner ([A-L])$/);
+        const winMatch = m.team1.match(/^([A-L])1$/);
         if (!winMatch) continue;
         const winnerLetter = winMatch[1];
         const thirdGroup = matrixLookup[winnerLetter];
@@ -1379,7 +1379,7 @@ function getKnockoutAssignments() {
       for (const t of top8) groupToTeam[t.group] = t;
       for (const m of FIXTURES) {
         if (m.stage !== "r32") continue;
-        const winMatch = m.team1.match(/^Winner ([A-L])$/);
+        const winMatch = m.team1.match(/^([A-L])1$/);
         if (!winMatch) continue;
         const winnerLetter = winMatch[1];
         const thirdGroup = matrixLookup[winnerLetter];
@@ -1412,8 +1412,8 @@ function getKnockoutAssignments() {
 function resolveTeamName(placeholder, m, pos, ko) {
   if (!ko || !ko.complete) return null;
   let match;
-  if ((match = placeholder.match(/^Winner ([A-L])$/))) return ko.winners[match[1]] || null;
-  if ((match = placeholder.match(/^Runner-up ([A-L])$/))) return ko.runnersUp[match[1]] || null;
+  if ((match = placeholder.match(/^([A-L])1$/))) return ko.winners[match[1]] || null;
+  if ((match = placeholder.match(/^([A-L])2$/))) return ko.runnersUp[match[1]] || null;
   if (placeholder.startsWith("3rd ")) {
     const a = ko.thirdsAssignments[`${matchId(m)}:${pos}`];
     return a ? a.team : null;
@@ -3123,7 +3123,7 @@ function buildPredictionKo() {
       for (const t of top8) groupToTeam[t.group] = t;
       for (const m of FIXTURES) {
         if (m.stage !== "r32") continue;
-        const winMatch = m.team1.match(/^Winner ([A-L])$/);
+        const winMatch = m.team1.match(/^([A-L])1$/);
         if (!winMatch) continue;
         const winnerLetter = winMatch[1];
         const thirdGroup = matrixLookup[winnerLetter];
@@ -3140,8 +3140,8 @@ function buildPredictionKo() {
 function predictResolveTeamName(placeholder, m, pos, predKo) {
   if (!predKo) return null;
   let mt;
-  if ((mt = placeholder.match(/^Winner ([A-L])$/))) return predKo.winners[mt[1]] || null;
-  if ((mt = placeholder.match(/^Runner-up ([A-L])$/))) return predKo.runnersUp[mt[1]] || null;
+  if ((mt = placeholder.match(/^([A-L])1$/))) return predKo.winners[mt[1]] || null;
+  if ((mt = placeholder.match(/^([A-L])2$/))) return predKo.runnersUp[mt[1]] || null;
   if (placeholder.startsWith("3rd ")) {
     if (!predKo.complete) return null;
     const a = predKo.thirdsAssignments[`${matchId(m)}:${pos}`];
