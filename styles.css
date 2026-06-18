@@ -3942,6 +3942,37 @@ footer {
   font-size: 11px;
 }
 
+/* Admin inline prediction editor */
+.upred-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.upred-in {
+  width: 34px;
+  padding: 3px 4px;
+  text-align: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+}
+.upred-in:focus { outline: none; border-color: var(--accent-2); }
+.upred-sep { color: var(--text-dim); font-weight: 700; }
+.upred-pk {
+  margin-left: 4px;
+  max-width: 96px;
+  padding: 3px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  color: var(--text);
+  font-size: 11px;
+}
+
 .upred-result-val {
   color: var(--text);
 }

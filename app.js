@@ -2554,7 +2554,22 @@ function openUserPredictionsModal(userId, userName) {
 
       let predCell, resultCell, ptsCell, rowClass = "";
 
-      if (hasPick) {
+      if (state.isAdmin) {
+        // Admin can set/edit this user's prediction (incl. finished matches).
+        const s1v = hasPick ? pick.score1 : "";
+        const s2v = hasPick ? pick.score2 : "";
+        const pkSel = m.stage !== "group" ? `
+            <select class="upred-pk" aria-label="Predicted PK winner">
+              <option value="">PK?</option>
+              <option value="1" ${pick && pick.pkWinner === 1 ? "selected" : ""}>${escapeHTML(displayT1)}</option>
+              <option value="2" ${pick && pick.pkWinner === 2 ? "selected" : ""}>${escapeHTML(displayT2)}</option>
+            </select>` : "";
+        predCell = `<span class="upred-edit" data-mid="${id}">
+            <input type="number" min="0" max="99" class="upred-in upred-in-s1" value="${s1v}" placeholder="–">
+            <span class="upred-sep">:</span>
+            <input type="number" min="0" max="99" class="upred-in upred-in-s2" value="${s2v}" placeholder="–">${pkSel}
+          </span>`;
+      } else if (hasPick) {
         let predStr = `${pick.score1}–${pick.score2}`;
         if (pick.pkWinner) predStr += ` (PK: ${pick.pkWinner === 1 ? escapeHTML(displayT1) : escapeHTML(displayT2)})`;
         predCell = `<span class="upred-pick-val">${escapeHTML(predStr)}</span>`;
@@ -2636,6 +2651,7 @@ function openUserPredictionsModal(userId, userName) {
         </table>
       </div>
       <div class="modal-actions">
+        ${state.isAdmin && userPicksSync.available ? `<button class="modal-btn" id="upredSaveBtn" type="button">💾 Save predictions</button>` : ""}
         <button class="modal-btn modal-btn-primary" id="upredCloseBtn" type="button">Close</button>
       </div>
     </div>
@@ -2654,6 +2670,40 @@ function openUserPredictionsModal(userId, userName) {
   modal.querySelector("#upredCloseBtn").addEventListener("click", close);
   modal.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
   setTimeout(() => modal.querySelector("#upredCloseBtn").focus(), 60);
+
+  const saveBtn = modal.querySelector("#upredSaveBtn");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", async () => {
+      const orig = saveBtn.textContent;
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving…";
+      const next = { ...(userEntry ? userEntry.picks : {}) };
+      modal.querySelectorAll(".upred-edit").forEach(cell => {
+        const mid = cell.dataset.mid;
+        const s1 = parseInt(cell.querySelector(".upred-in-s1").value, 10);
+        const s2 = parseInt(cell.querySelector(".upred-in-s2").value, 10);
+        if (Number.isFinite(s1) && Number.isFinite(s2)) {
+          const p = { score1: Math.max(0, Math.min(99, s1)), score2: Math.max(0, Math.min(99, s2)) };
+          const pk = cell.querySelector(".upred-pk");
+          if (pk && pk.value && p.score1 === p.score2) p.pkWinner = parseInt(pk.value, 10);
+          next[mid] = p;
+        } else {
+          delete next[mid]; // both cleared → remove the pick
+        }
+      });
+      try {
+        await userPicksSync.saveForUser(userId, userName, next, userEntry && userEntry.firstSubmittedAt);
+        if (userEntry) userEntry.picks = next;
+        else state.leaderboardUsers.push({ userId, userName, picks: next, firstSubmittedAt: new Date().toISOString(), totalPicks: 0 });
+        if (state.view === "leaderboard") renderLeaderboardView();
+        openUserPredictionsModal(userId, userName); // rebuild with recomputed points
+      } catch (e) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save failed — retry";
+        setTimeout(() => { saveBtn.textContent = orig; }, 2500);
+      }
+    });
+  }
 }
 
 function playExactScoreSound() {
@@ -4515,7 +4565,24 @@ const userPicksSync = (() => {
     }, (err) => console.warn("User picks subscribe failed:", err.message || err));
   }
 
-  return { available: true, saveOwn, fetchOwn, fetchAll, subscribe };
+  // Admin: write another user's picks (e.g. backfilling a finished match's
+  // prediction). Requires the Firestore rules to allow admin writes to userpicks.
+  async function saveForUser(userId, userName, picksObj, firstSubmittedAt) {
+    const totalPicks = Object.keys(picksObj).filter(id => {
+      const p = picksObj[id];
+      return p && p.score1 !== undefined && p.score2 !== undefined;
+    }).length;
+    await db.collection(COLL).doc(userId).set({
+      userId,
+      userName,
+      picks: encodeMatchPicks(picksObj),
+      firstSubmittedAt: firstSubmittedAt || new Date().toISOString(),
+      totalPicks,
+      updatedAt: _fbServerTime(),
+    }, { merge: true });
+  }
+
+  return { available: true, saveOwn, fetchOwn, fetchAll, subscribe, saveForUser };
 })();
 
 // ===== Scoring engine =====
