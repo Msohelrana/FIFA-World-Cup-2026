@@ -4511,13 +4511,33 @@ const userPicksSync = (() => {
     if (!state.currentUser) return;
     const uid = state.currentUser.id;
     if (!state.currentUser.firstSubmittedAt) state.currentUser.firstSubmittedAt = new Date().toISOString();
+
+    // A kicked-off match's pick is final. Never let this device overwrite the
+    // server's existing pick for a locked match (e.g. via the "use device"
+    // merge, or a stale second device). Merge the server's locked picks back in
+    // before saving. Only needed once matches start locking.
+    let picks = state.matchPicks;
+    if (FIXTURES.some(m => isMatchLocked(m))) {
+      try {
+        const snap = await db.collection(COLL).doc(uid).get();
+        if (snap.exists) {
+          const serverPicks = decodeMatchPicks(snap.data().picks || "");
+          picks = { ...state.matchPicks };
+          for (const m of FIXTURES) {
+            const id = matchId(m);
+            if (isMatchLocked(m) && serverPicks[id]) picks[id] = serverPicks[id];
+          }
+        }
+      } catch { /* read failed — fall back to device picks */ }
+    }
+
     const payload = {
       userId: uid,
       userName: state.currentUser.name,
-      picks: encodeMatchPicks(state.matchPicks),
+      picks: encodeMatchPicks(picks),
       firstSubmittedAt: state.currentUser.firstSubmittedAt,
-      totalPicks: Object.keys(state.matchPicks).filter(id => {
-        const p = state.matchPicks[id];
+      totalPicks: Object.keys(picks).filter(id => {
+        const p = picks[id];
         return p && p.score1 !== undefined && p.score2 !== undefined;
       }).length,
       updatedAt: _fbServerTime(),
