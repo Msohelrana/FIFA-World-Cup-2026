@@ -14,6 +14,9 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 const API = "https://api.fifa.com/api/v3";
 const ID_COMPETITION = "17", ID_SEASON = "285023";
 const STATUS_FINISHED = 0;
+// Optional recency window (hours). The scheduled job sets BACKFILL_HOURS so each
+// run only touches recently-finished matches; unset/0 = backfill ALL finished.
+const WINDOW_MS = (Number(process.env.BACKFILL_HOURS) || 0) * 3600e3;
 const GOAL_TYPES = new Set([0, 34, 39, 41]);
 const TYPE_OWN_GOAL = 34, PERIOD_SHOOTOUT = 11;
 const CARD_TYPES = new Map([[2, "yellow"], [3, "red"], [4, "yellowred"]]);
@@ -71,6 +74,7 @@ const cal = await fetchJSON(`${API}/calendar/matches?idCompetition=${ID_COMPETIT
 let done = 0, skipped = 0;
 for (const fm of (cal.Results || [])) {
   if (fm.MatchStatus !== STATUS_FINISHED) continue;
+  if (WINDOW_MS && Date.parse(fm.Date) < Date.now() - WINDOW_MS) continue; // older than the window
   const home = sideName(fm.Home), away = sideName(fm.Away);
   if (!home || !away) { skipped++; continue; }
   // Group-stage matching by team pairing (unique in the group stage).
