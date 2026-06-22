@@ -423,6 +423,8 @@ const liveScores = (() => {
         matchTime: (lp && lp.matchTime) || fm.MatchTime || "",
         // Identifiers for the on-demand match-stats endpoint (fdh-api)
         statsId: (fm.Properties && fm.Properties.IdIFES) || null,
+        idMatch: fm.IdMatch,   // for the admin "refresh scorers" on-demand timeline fetch
+        idStage: fm.IdStage,
         idTeam1: flipped ? (fm.Away && fm.Away.IdTeam) : (fm.Home && fm.Home.IdTeam),
         idTeam2: flipped ? (fm.Home && fm.Home.IdTeam) : (fm.Away && fm.Away.IdTeam),
       };
@@ -572,11 +574,32 @@ const liveScores = (() => {
     timer = setTimeout(tick, delay);
   }
 
+  // Force-fetch one match's scorers/cards from its FIFA timeline on demand,
+  // ignoring the usual "recently finished" window. Powers the admin
+  // "refresh scorers" button for matches that finished before anyone was online.
+  async function fetchScorers(appMatchId, t1, t2) {
+    const rec = overlay.get(appMatchId);
+    if (!rec || !rec.idMatch || !rec.idStage) return null;
+    try {
+      const tl = await fetchJSON(`${API}/timelines/${ID_COMPETITION}/${ID_SEASON}/${rec.idStage}/${rec.idMatch}?language=en`);
+      const scorers = parseScorers(tl, t1, t2);
+      const cards = parseCards(tl, t1, t2);
+      rec.scorers = scorers; rec.cards = cards;
+      scorerCache[rec.idMatch] = { scorers, cards };
+      persistScorerCache();
+      return { scorers, cards };
+    } catch (err) {
+      console.warn("fetchScorers failed:", err.message || err);
+      return null;
+    }
+  }
+
   return {
     get(id) { return overlay.get(id) || null; },
     // FIFA's official within-group position for a team, or null if unknown.
     officialPosition(team) { return standingPos.get(team) || null; },
     getStats,
+    fetchScorers,
     getSquadByName,
     getTeamInfoByName,
     getTeamFormByName,

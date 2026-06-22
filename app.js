@@ -681,7 +681,12 @@ function renderMatchCard(m, highlightTeam, ko) {
   const statsBtnHTML = (liveRec && liveRec.statsId && liveRec.idTeam1 && liveRec.idTeam2)
     ? `<button type="button" class="stats-btn">📊 Match Stats</button>`
     : "";
-  const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span>${statsBtnHTML}</div>`;
+  // Admin-only: pull this match's scorers/cards from the FIFA API on demand
+  // (for games that finished while no one was on the app).
+  const refreshBtnHTML = (state.isAdmin && liveRec)
+    ? `<button type="button" class="refresh-scorers-btn" title="Fetch scorers & cards from the FIFA API">⚽ Refresh scorers</button>`
+    : "";
+  const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span>${refreshBtnHTML}${statsBtnHTML}</div>`;
 
   card.innerHTML = meta + teamsHTML + resultHTML + scorersHTML + footer;
 
@@ -698,6 +703,33 @@ function renderMatchCard(m, highlightTeam, ko) {
   const statsBtnEl = card.querySelector(".stats-btn");
   if (statsBtnEl) {
     statsBtnEl.addEventListener("click", () => showMatchStats(m, displayTeam1, displayTeam2));
+  }
+
+  const refreshBtnEl = card.querySelector(".refresh-scorers-btn");
+  if (refreshBtnEl) {
+    refreshBtnEl.addEventListener("click", async () => {
+      const orig = refreshBtnEl.textContent;
+      refreshBtnEl.disabled = true;
+      refreshBtnEl.textContent = "⏳ Fetching…";
+      const res = await liveScores.fetchScorers(matchId(m), displayTeam1, displayTeam2);
+      if (!res || (!res.scorers.length && !res.cards.length)) {
+        refreshBtnEl.textContent = "No scorers found";
+        setTimeout(() => { refreshBtnEl.disabled = false; refreshBtnEl.textContent = orig; }, 2000);
+        return;
+      }
+      const id = matchId(m);
+      const r = { ...(state.results[id] || {}) };
+      r.scorers = res.scorers;
+      if (res.cards.length) r.cards = res.cards;
+      // Ensure a score is present so it counts as a real result.
+      if ((r.score1 === undefined || r.score2 === undefined) && liveRec && liveRec.score1 !== undefined) {
+        r.score1 = liveRec.score1; r.score2 = liveRec.score2;
+      }
+      state.results[id] = sanitizeResult(r);
+      saveResults();
+      appwriteSync.scheduleMatch(id);       // sync to Firestore
+      card.replaceWith(renderMatchCard(m, highlightTeam, ko));
+    });
   }
 
   wireScoreInputs(card, m, displayTeam1, displayTeam2, teamsKnown);
