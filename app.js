@@ -2221,11 +2221,29 @@ function renderPicks() {
   const now = Date.now();
   const TWENTY_FOUR_H = 24 * 60 * 60 * 1000;
 
+  // ── Live Now (pinned at top, like the Schedule tab) ──
+  const liveMatches = FIXTURES.filter(m => applyLiveChip(matchId(m), formatCountdown(m)).state === "live");
+  const liveIds = new Set(liveMatches.map(m => matchId(m)));
+  if (liveMatches.length > 0) {
+    const liveGroup = document.createElement("div");
+    liveGroup.className = "day-group live-now-group";
+    const liveHeader = document.createElement("div");
+    liveHeader.className = "day-header live-now-header";
+    liveHeader.innerHTML = `<span class="day-date live-now-label">🔴 Live Now</span><span class="day-count">${liveMatches.length} ${liveMatches.length === 1 ? "match" : "matches"}</span>`;
+    liveGroup.appendChild(liveHeader);
+    const liveList = document.createElement("div");
+    liveList.className = "match-list";
+    for (const m of liveMatches) liveList.appendChild(renderPickCard(m, ko));
+    liveGroup.appendChild(liveList);
+    view.appendChild(liveGroup);
+  }
+
   const upcomingByDate = new Map();
   const recentByDate   = new Map();
   const oldByDate      = new Map();
 
   for (const m of FIXTURES) {
+    if (liveIds.has(matchId(m))) continue;
     const key = dateKeyInTz(fixtureToUTC(m), tz);
     const kickoffMs = fixtureToUTC(m).getTime();
     const cd = formatCountdown(m);
