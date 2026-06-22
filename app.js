@@ -3098,9 +3098,21 @@ function renderGoldenBootCard(rows) {
 // (which is chronological) to the order that visually pairs each match with its
 // two upstream feeders. Without this, FIFA's cross-bracket (where R16 M89 pulls
 // from R32 indices 2 and 5, not 0 and 1) makes the column alignment chaotic.
+// Visual top-to-bottom order of matches in each round so that every match sits
+// directly beside the two matches that feed it. Derived from the bracket wiring
+// in fixtures.js (the `bracket: {stage,index,role}` objects): walking down from
+// the Final, each parent at display position p expects its two feeder matches at
+// child positions 2p and 2p+1 (team1 feeder on top, team2 feeder below).
+//   sf  [0,1]                  ← final's two feeders
+//   qf  [0,1,2,3]              ← sf[0]←{qf0,qf1}, sf[1]←{qf2,qf3}
+//   r16 [0,1,4,5,2,3,6,7]      ← qf[0]←{r16 0,1}, qf[1]←{r16 4,5}, qf[2]←{r16 2,3}, qf[3]←{r16 6,7}
+//   r32 expands each r16 match into its two r32 feeders, in that same r16 order.
+// These are RAW indices into FIXTURES.filter(stage===…); they only reorder the
+// display — winner propagation uses the wiring indices directly, so the data is
+// unaffected. If the wiring in fixtures.js changes, re-derive these.
 const BRACKET_DISPLAY_ORDER = {
-  r32: [2, 5, 0, 3, 11, 10, 9, 8, 1, 4, 6, 7, 14, 13, 12, 15],
-  r16: [1, 0, 4, 5, 2, 3, 6, 7],
+  r32: [0, 2, 1, 4, 10, 11, 8, 9, 3, 5, 6, 7, 13, 15, 12, 14],
+  r16: [0, 1, 4, 5, 2, 3, 6, 7],
   qf:  [0, 1, 2, 3],
   sf:  [0, 1],
   final: [0],
@@ -3201,7 +3213,33 @@ function buildPredictionKo() {
     }
   }
 
-  return { complete: ready, winners, runnersUp, top8, thirdsAssignments };
+  const predKo = { complete: ready, winners, runnersUp, top8, thirdsAssignments };
+  if (!isViewingShared()) pruneStalePredictKoWinners(predKo);
+  return predKo;
+}
+
+// A KO winner is stored by team NAME. If an upstream change (group order, best
+// thirds, or an earlier-round pick) means a stored winner is no longer one of
+// the two teams now in that match, drop it permanently — otherwise it would
+// silently reactivate if that same team later flows back into the slot, looking
+// like the next round auto-selected itself. Forward pass (R32→Final) so clearing
+// an early pick cascades to the rounds it feeds within the same sweep.
+function pruneStalePredictKoWinners(predKo) {
+  let changed = false;
+  for (const stage of ["r32", "r16", "qf", "sf", "third", "final"]) {
+    for (const m of FIXTURES) {
+      if (m.stage !== stage) continue;
+      const id = matchId(m);
+      const picked = state.prediction.koWinners[id];
+      if (!picked) continue;
+      const { team1, team2 } = predictResolveMatchTeams(m, predKo);
+      if (picked !== team1 && picked !== team2) {
+        delete state.prediction.koWinners[id];
+        changed = true;
+      }
+    }
+  }
+  if (changed) savePrediction();
 }
 
 function predictResolveTeamName(placeholder, m, pos, predKo) {
