@@ -4039,6 +4039,28 @@ footer {
   background: transparent;
 }
 
+/* Live match row — highlighted so an in-progress match's prediction stands out
+   (placed last so it overrides the scoring-result backgrounds above). */
+.upred-row-live td {
+  background: rgba(255, 77, 109, 0.14);
+  border-top: 2px solid #ff4d6d;
+  border-bottom: 2px solid #ff4d6d;
+}
+.upred-row-live td:first-child {
+  border-left: 2px solid #ff4d6d;
+  font-weight: 700;
+}
+.upred-row-live td:last-child {
+  border-right: 2px solid #ff4d6d;
+}
+.upred-live-dot {
+  font-size: 9px;
+  vertical-align: middle;
+  display: inline-block;
+  animation: upredDotPulse 1.3s ease-in-out infinite;
+}
+@keyframes upredDotPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
 @media (max-width: 600px) {
   .upred-modal {
     padding: 16px 12px 12px;

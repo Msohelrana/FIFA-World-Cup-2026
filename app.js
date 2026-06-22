@@ -2613,6 +2613,7 @@ function openUserPredictionsModal(userId, userName) {
       const result = getResult(m);
       const hasPick = pick && pick.score1 !== undefined && pick.score2 !== undefined;
       const hasResult = result && result.score1 !== undefined && result.score2 !== undefined;
+      const isLive = applyLiveChip(id, formatCountdown(m)).state === "live";
 
       const { team1: t1, team2: t2 } = resolveMatchTeams(m, ko);
       const displayT1 = t1 || m.team1;
@@ -2676,8 +2677,8 @@ function openUserPredictionsModal(userId, userName) {
       }
 
       tableHTML += `
-        <tr class="upred-row ${rowClass}">
-          <td class="upred-td-match">${escapeHTML(displayT1)} <span class="upred-vs">vs</span> ${escapeHTML(displayT2)}</td>
+        <tr class="upred-row ${rowClass}${isLive ? " upred-row-live" : ""}">
+          <td class="upred-td-match">${isLive ? '<span class="upred-live-dot" title="Live now">🔴</span> ' : ""}${escapeHTML(displayT1)} <span class="upred-vs">vs</span> ${escapeHTML(displayT2)}</td>
           <td class="upred-td-pick">${predCell}</td>
           <td class="upred-td-result">${resultCell}</td>
           <td class="upred-td-pts">${ptsCell}</td>
