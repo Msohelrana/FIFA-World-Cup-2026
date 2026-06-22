@@ -1501,10 +1501,10 @@ function computeStandings(groupLetter) {
 
   for (const t in stats) stats[t].gd = stats[t].gf - stats[t].ga;
 
-  // Last-resort tiebreaker for teams the app can't separate (FIFA's "drawing of
-  // lots", plus a backstop for fair-play when a finished match's cards aren't
-  // loaded): use FIFA's official published position, falling back to
-  // alphabetical when the live standings feed is unavailable.
+  // Final fallback when every sporting criterion is equal. FIFA 2026 removed the
+  // drawing of lots and uses the FIFA World Ranking; we approximate that with
+  // FIFA's official published group position, then alphabetical if the live
+  // standings feed isn't available.
   const officialPos = (team) =>
     (typeof liveScores !== "undefined" && liveScores.officialPosition)
       ? liveScores.officialPosition(team) : null;
@@ -1514,44 +1514,60 @@ function computeStandings(groupLetter) {
     return x.team.localeCompare(y.team);
   };
 
+  // Head-to-head mini-table (points/GD/GF) among a subset of teams.
+  function h2hTable(group) {
+    const ids = new Set(group.map(s => s.team));
+    const t = {};
+    group.forEach(s => { t[s.team] = { p: 0, gd: 0, gf: 0 }; });
+    for (const g of playedMatches) {
+      if (!ids.has(g.t1) || !ids.has(g.t2)) continue;
+      t[g.t1].gf += g.s1; t[g.t1].gd += g.s1 - g.s2;
+      t[g.t2].gf += g.s2; t[g.t2].gd += g.s2 - g.s1;
+      if (g.s1 > g.s2) t[g.t1].p += 3;
+      else if (g.s2 > g.s1) t[g.t2].p += 3;
+      else { t[g.t1].p++; t[g.t2].p++; }
+    }
+    return t;
+  }
+
+  // FIFA 2026 tiebreakers for teams level on POINTS — head-to-head now ranks
+  // ABOVE overall goal difference:
+  //   1) H2H points  2) H2H GD  3) H2H GF  (re-applied to any subset still level)
+  //   then 4) overall GD  5) overall GF  6) fair play  7) FIFA ranking.
+  function rankLevelOnPoints(group) {
+    if (group.length === 1) return group;
+    const h = h2hTable(group);
+    const ordered = [...group].sort((x, y) =>
+      h[y.team].p - h[x.team].p || h[y.team].gd - h[x.team].gd || h[y.team].gf - h[x.team].gf || 0);
+    const out = [];
+    for (let i = 0; i < ordered.length; ) {
+      let j = i + 1;
+      while (j < ordered.length &&
+        h[ordered[j].team].p === h[ordered[i].team].p &&
+        h[ordered[j].team].gd === h[ordered[i].team].gd &&
+        h[ordered[j].team].gf === h[ordered[i].team].gf) j++;
+      const sub = ordered.slice(i, j);
+      if (sub.length === 1) out.push(sub[0]);
+      else if (sub.length < group.length) out.push(...rankLevelOnPoints(sub)); // re-apply H2H to the still-level subset
+      else out.push(...sub.sort((x, y) =>   // whole set still level on H2H → overall criteria
+        y.gd - x.gd || y.gf - x.gf || y.fp - x.fp || finalTieBreak(x, y)));
+      i = j;
+    }
+    return out;
+  }
+
   // If the group has no entered results, show all teams alphabetically with zeros.
   const groupHasAnyResult = Object.values(stats).some(s => s.played > 0);
-  const sorted = groupHasAnyResult
-    ? Object.values(stats).sort((x, y) =>
-      y.points - x.points ||
-      y.gd - x.gd ||
-      y.gf - x.gf ||
-      finalTieBreak(x, y)
-    )
-    : Object.values(stats).sort((x, y) => x.team.localeCompare(y.team));
-
-  // FIFA tiebreakers beyond GF: re-rank runs tied on points/GD/GF by
-  // head-to-head (points, GD, GF among the tied teams), then fair play.
-  if (groupHasAnyResult) {
+  let sorted;
+  if (!groupHasAnyResult) {
+    sorted = Object.values(stats).sort((x, y) => x.team.localeCompare(y.team));
+  } else {
+    sorted = Object.values(stats).sort((x, y) => y.points - x.points);
+    // Re-rank each run of teams level on points by the FIFA 2026 criteria.
     for (let i = 0; i < sorted.length; ) {
       let j = i + 1;
-      while (j < sorted.length && sorted[j].points === sorted[i].points &&
-             sorted[j].gd === sorted[i].gd && sorted[j].gf === sorted[i].gf) j++;
-      if (j - i > 1) {
-        const tied = new Set(sorted.slice(i, j).map(s => s.team));
-        const mini = {};
-        tied.forEach(t => { mini[t] = { p: 0, gd: 0, gf: 0 }; });
-        for (const g of playedMatches) {
-          if (!tied.has(g.t1) || !tied.has(g.t2)) continue;
-          mini[g.t1].gf += g.s1; mini[g.t1].gd += g.s1 - g.s2;
-          mini[g.t2].gf += g.s2; mini[g.t2].gd += g.s2 - g.s1;
-          if (g.s1 > g.s2) mini[g.t1].p += 3;
-          else if (g.s2 > g.s1) mini[g.t2].p += 3;
-          else { mini[g.t1].p++; mini[g.t2].p++; }
-        }
-        const sub = sorted.slice(i, j).sort((x, y) =>
-          mini[y.team].p - mini[x.team].p ||
-          mini[y.team].gd - mini[x.team].gd ||
-          mini[y.team].gf - mini[x.team].gf ||
-          y.fp - x.fp ||
-          finalTieBreak(x, y));
-        sorted.splice(i, j - i, ...sub);
-      }
+      while (j < sorted.length && sorted[j].points === sorted[i].points) j++;
+      if (j - i > 1) sorted.splice(i, j - i, ...rankLevelOnPoints(sorted.slice(i, j)));
       i = j;
     }
   }
