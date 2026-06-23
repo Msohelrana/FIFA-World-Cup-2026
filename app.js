@@ -655,7 +655,8 @@ function renderMatchCard(m, highlightTeam, ko) {
   // (and unconditionally disable for viewers in read-only mode).
   const penDisabled = (tied && editing) ? "" : "disabled";
   const penInputs = isKnockout
-    ? `<span class="pen-block ${tied ? "" : "is-disabled"}">PK
+    ? `<span class="pen-block ${tied ? "" : "is-disabled"}">
+        <span class="pk-tag">PK</span>
         <input type="number" min="0" max="99" class="score-input pen-input pen1" value="${p1}" placeholder="–" aria-label="${displayTeam1} penalty score" ${penDisabled}>
         <span class="score-sep">:</span>
         <input type="number" min="0" max="99" class="score-input pen-input pen2" value="${p2}" placeholder="–" aria-label="${displayTeam2} penalty score" ${penDisabled}>
@@ -664,13 +665,18 @@ function renderMatchCard(m, highlightTeam, ko) {
 
   const winnerLabel = resultLabel(m, r, displayTeam1, displayTeam2);
   const lockedAttr = editing ? "" : "disabled";
+  // Scores sit under their team names (left under team1, right under team2),
+  // PK inputs in the centre, result label on its own line below — same layout
+  // as the Match Predict cards.
   const resultHTML = `
-    <div class="result-row" data-mid="${matchId(m)}">
-      <input type="number" min="0" max="99" class="score-input score1" value="${s1}" placeholder="–" aria-label="${displayTeam1} score" ${lockedAttr}>
-      <span class="score-sep">:</span>
-      <input type="number" min="0" max="99" class="score-input score2" value="${s2}" placeholder="–" aria-label="${displayTeam2} score" ${lockedAttr}>
-      ${penInputs}
-      <span class="result-label">${winnerLabel}</span>
+    <div class="pb-section pb-result-section">
+      <div class="pb-row pb-result" data-mid="${matchId(m)}">
+        <input type="number" min="0" max="99" class="score-input score1" value="${s1}" placeholder="–" aria-label="${displayTeam1} score" ${lockedAttr}>
+        <span class="score-sep">:</span>
+        <input type="number" min="0" max="99" class="score-input score2" value="${s2}" placeholder="–" aria-label="${displayTeam2} score" ${lockedAttr}>
+      </div>
+      ${penInputs ? `<div class="pb-pk-row">${penInputs}</div>` : ""}
+      <div class="pb-label-row"><span class="result-label">${winnerLabel}</span></div>
     </div>`;
 
   const scorersHTML = `<div class="scorers-row" data-mid="${matchId(m)}"></div>`;
@@ -979,14 +985,14 @@ function computeWinnerFromResult(m, r, t1, t2) {
 function preserveScrollAndFocus(fn) {
   const scrollY = window.scrollY;
   const active = document.activeElement;
-  const row = active && active.closest && active.closest(".result-row");
+  const row = active && active.closest && active.closest(".pb-result");
   const mid = row ? row.dataset.mid : null;
   const cls = ["score1", "score2", "pen1", "pen2"].find(c => active && active.classList && active.classList.contains(c));
 
   fn();
 
   if (mid && cls) {
-    const sel = `.result-row[data-mid="${CSS.escape(mid)}"] .${cls}`;
+    const sel = `.pb-result[data-mid="${CSS.escape(mid)}"] .${cls}`;
     const el = document.querySelector(sel);
     if (el) el.focus();
   }
@@ -994,13 +1000,14 @@ function preserveScrollAndFocus(fn) {
 }
 
 function wireScoreInputs(card, m, t1, t2, teamsKnown) {
-  const row = card.querySelector(".result-row");
+  const row = card.querySelector(".pb-result");
+  const section = row.closest(".pb-section") || card;
   const s1 = row.querySelector(".score1");
   const s2 = row.querySelector(".score2");
-  const p1 = row.querySelector(".pen1");
-  const p2 = row.querySelector(".pen2");
-  const penBlock = row.querySelector(".pen-block");
-  const label = row.querySelector(".result-label");
+  const p1 = section.querySelector(".pen1");
+  const p2 = section.querySelector(".pen2");
+  const penBlock = section.querySelector(".pen-block");
+  const label = card.querySelector(".result-label");
   const isKnockout = m.stage !== "group";
 
   const parseNum = el => el.value === "" ? undefined : Math.max(0, parseInt(el.value, 10) || 0);
@@ -2371,6 +2378,7 @@ function renderPickCard(m, ko) {
   const meta = `<div class="match-meta">${stageBadge}<span class="match-time">${timeText}</span>${countdownChip}</div>`;
   if (cd.state === "live") card.classList.add("is-live");
   if (cd.state === "ended") card.classList.add("is-ended");
+  if (locked) card.classList.add("is-locked");
   card.dataset.kickoff = String(kickoffUtcMs);
   card.dataset.stage = m.stage;
 
@@ -2406,17 +2414,64 @@ function renderPickCard(m, ko) {
       <button type="button" class="pk-btn ${pick.pkWinner === 1 ? "is-picked" : ""}" data-pk="1">${escapeHTML(t1)}</button>
       <button type="button" class="pk-btn ${pick.pkWinner === 2 ? "is-picked" : ""}" data-pk="2">${escapeHTML(t2)}</button>
     </div>` : "";
-  const resultLine = `
-    <div class="result-row pick-row" data-mid="${matchId(m)}">
-      <input type="number" min="0" max="99" class="score-input pick-s1" value="${s1}" placeholder="–" aria-label="Predicted score for ${t1}" ${disabledAttr}>
-      <span class="score-sep">:</span>
-      <input type="number" min="0" max="99" class="score-input pick-s2" value="${s2}" placeholder="–" aria-label="Predicted score for ${t2}" ${disabledAttr}>
-      ${lockBadge}
-      <span class="result-label ${isDraw ? "is-draw" : ""}">${labelText}</span>
-    </div>${pkPickerHTML}`;
+  // Prediction scores sit directly under each team name (left under team1,
+  // right under team2). The lock/TBD badge — or a "Your pick" tag — goes in the
+  // centre, and the verdict label drops to its own line below.
+  const predRow = `
+    <div class="pb-section pb-pred-section">
+      <div class="pb-row pb-pred" data-mid="${matchId(m)}">
+        <input type="number" min="0" max="99" class="score-input pick-s1" value="${s1}" placeholder="–" aria-label="Predicted score for ${t1}" ${disabledAttr}>
+        <span class="pb-center">${lockBadge || '<span class="pb-tag">Your pick</span>'}</span>
+        <input type="number" min="0" max="99" class="score-input pick-s2" value="${s2}" placeholder="–" aria-label="Predicted score for ${t2}" ${disabledAttr}>
+      </div>
+      <div class="pb-label-row"><span class="result-label ${isDraw ? "is-draw" : ""}">${labelText}</span></div>
+    </div>
+    ${pkPickerHTML}`;
+
+  // Actual result (live or final) so the user can compare it with their pick.
+  const result = getResult(m);
+  const hasResult = result && result.score1 !== undefined && result.score2 !== undefined;
+  let actualHTML = "";
+  if (hasResult) {
+    const isLiveResult = !!result.isLive;
+    const wentToPK = isKO && result.score1 === result.score2
+      && result.pen1 !== undefined && result.pen2 !== undefined && result.pen1 !== result.pen2;
+    const pensHTML = wentToPK ? `<span class="pick-actual-pens">(PK ${result.pen1}–${result.pen2})</span>` : "";
+
+    const hasPick = pick.score1 !== undefined && pick.score2 !== undefined;
+    const s = hasPick ? scoreMatchPick(pick, result, m) : null;
+    let verdict;
+    if (!hasPick) {
+      verdict = `<span class="pick-verdict v-none">No prediction</span>`;
+    } else if (isLiveResult) {
+      verdict = `<span class="pick-verdict v-live">+${s ? s.awarded : 0} so far</span>`;
+    } else if (s && s.exact) {
+      verdict = `<span class="pick-verdict v-exact">🎯 Exact · +${s.awarded}</span>`;
+    } else if (s && s.awarded > 0) {
+      const parts = [];
+      if (s.outcome) parts.push("Outcome");
+      if (s.diff) parts.push("GD");
+      if (s.pkBonus > 0) parts.push("PK");
+      verdict = `<span class="pick-verdict v-partial">✓ ${parts.join(" + ") || "Close"} · +${s.awarded}</span>`;
+    } else {
+      verdict = `<span class="pick-verdict v-miss">✗ Missed · 0</span>`;
+    }
+
+    // Mirrors the prediction row: each actual score under its team name, in a
+    // distinct color so it reads as the official result, not an editable input.
+    actualHTML = `
+      <div class="pb-section pb-actual-section${isLiveResult ? " is-live-result" : ""}">
+        <div class="pb-row pb-actual">
+          <span class="score-box">${result.score1}</span>
+          <span class="pb-center actual-tag">${isLiveResult ? "Live" : "Result"}${pensHTML}</span>
+          <span class="score-box">${result.score2}</span>
+        </div>
+        <div class="pb-label-row">${verdict}</div>
+      </div>`;
+  }
 
   const footer = `<div class="match-footer"><span class="venue">${venueWithCountry(m.venue)}</span></div>`;
-  card.innerHTML = meta + teamsHTML + resultLine + footer;
+  card.innerHTML = meta + teamsHTML + predRow + actualHTML + footer;
 
   // Tapping a known team's name opens its squad + team-info (independent of lock).
   card.querySelectorAll(".team-info-link").forEach(el => {
@@ -2424,10 +2479,9 @@ function renderPickCard(m, ko) {
   });
 
   if (!locked && teamsKnown) {
-    const row = card.querySelector(".result-row");
-    const label = row.querySelector(".result-label");
-    const i1 = row.querySelector(".pick-s1");
-    const i2 = row.querySelector(".pick-s2");
+    const label = card.querySelector(".pb-label-row .result-label");
+    const i1 = card.querySelector(".pick-s1");
+    const i2 = card.querySelector(".pick-s2");
     const parse = el => el.value === "" ? undefined : Math.max(0, Math.min(99, parseInt(el.value, 10) || 0));
     const onChange = () => {
       // Re-check lock at change time; if just kicked off, refuse + re-render
@@ -4987,7 +5041,7 @@ function tickCountdowns() {
     // Skip cards > 24h away on sub-minute ticks — their text won't change
     if (diff > 24 * 60 * 60 * 1000 && _tickN % 60 !== 0) return;
     const stage = card.dataset.stage || "group";
-    const mid = card.querySelector(".result-row")?.dataset.mid;
+    const mid = card.querySelector("[data-mid]")?.dataset.mid;
     const cdFinal = applyLiveChip(mid, formatCountdownDirect(kickoff, stage, now));
     card.classList.toggle("is-live", cdFinal.state === "live");
     if (cdFinal.state === "ended") {
@@ -5469,7 +5523,7 @@ if (typeof liveScores !== "undefined") {
     updateProgressBar();
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;
-    if (ae && ae.closest && ae.closest(".result-row, .scorer-form")) return;
+    if (ae && ae.closest && ae.closest(".pb-result, .scorer-form")) return;
     // Groups view is static (team names only) — live scores never affect it
     if (state.view === "groups") return;
     // Standings: patch only the tables for groups with changed matches.
@@ -5517,7 +5571,7 @@ if (typeof liveScores !== "undefined") {
       return;
     }
     for (const id of changedIds) {
-      const row = document.querySelector(`.result-row[data-mid="${CSS.escape(id)}"]`);
+      const row = document.querySelector(`.pb-result[data-mid="${CSS.escape(id)}"]`);
       const card = row && row.closest(".match-card");
       if (!card) continue; // not rendered under the current filters
       const m = FIXTURES.find((fx) => matchId(fx) === id);

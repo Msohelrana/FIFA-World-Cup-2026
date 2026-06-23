@@ -3067,20 +3067,20 @@ footer {
   border-color: rgba(255, 77, 109, 0.45);
 }
 
-.pick-card .result-row .score-input:disabled {
+.pick-card .pb-pred .score-input:disabled {
   cursor: not-allowed;
   background: rgba(11, 16, 32, 0.4);
   color: var(--text-dim);
 }
 
-.pick-card.is-ended .pick-row {
+/* Once a match is locked (kicked off — live or finished), the prediction section
+   turns red */
+.pick-card.is-locked .pb-pred-section {
   background: rgba(255, 50, 70, 0.07);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 77, 109, 0.3);
-  padding: 6px 10px;
+  border-color: rgba(255, 77, 109, 0.3);
 }
 
-.pick-card.is-ended .pick-row .score-input:disabled {
+.pick-card.is-locked .pb-pred .score-input:disabled {
   background: rgba(255, 50, 70, 0.1);
   color: #ff8090;
   border-color: rgba(255, 77, 109, 0.35);
@@ -3090,6 +3090,132 @@ footer {
 .pick-card .result-label.is-draw {
   color: var(--accent-2);
 }
+
+/* Scoreboard sections under the team names — the prediction inputs and the
+   actual result, each score sitting directly beneath its team (left under team1,
+   right under team2) with the centre holding the lock/tag and the label below.
+   Each section keeps its own boxed background (pick = dark, actual = cyan). */
+.pb-section {
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.pb-pred-section,
+.pb-result-section {
+  background: rgba(11, 16, 32, 0.55);
+}
+.pb-actual-section {
+  background: rgba(76, 201, 240, 0.08);
+  border-color: rgba(76, 201, 240, 0.35);
+}
+.pb-actual-section.is-live-result {
+  background: rgba(255, 77, 109, 0.1);
+  border-color: rgba(255, 77, 109, 0.35);
+}
+/* Scores grouped together in the centre, with the centre element (colon, lock
+   badge / "Your pick" tag, or "Result" tag) sitting between the two scores. */
+.pb-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.pb-pk-row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+/* In the centred PK row, drop the inline divider/offsets so the pen scores line
+   up directly under the main scores, and float the "PK" label out of the centre. */
+.pb-pk-row .pen-block {
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border-left: 0;
+}
+.pb-pk-row .pen-input {
+  width: 44px;
+  font-size: 15px;
+  padding: 6px 4px;
+}
+.pk-tag {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.pb-center {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 2px;
+}
+.pb-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.pb-label-row {
+  text-align: center;
+  margin: 6px 0 0;
+}
+.actual-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-2);
+}
+.pb-actual-section.is-live-result .actual-tag {
+  color: #ff8095;
+}
+/* Read-only score "box" — same shape as the prediction input; background matches
+   the result section, with a cyan border (red while live) for the box shape. */
+.score-box {
+  width: 44px;
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: rgba(76, 201, 240, 0.08);
+  border: 1px solid rgba(76, 201, 240, 0.55);
+}
+.pb-actual-section.is-live-result .score-box {
+  border-color: rgba(255, 77, 109, 0.6);
+}
+.pick-actual-pens {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.pick-verdict {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pick-verdict.v-exact { color: #0b1020; background: var(--gold); }
+.pick-verdict.v-partial { color: #b7f7c8; background: rgba(60, 200, 110, 0.16); }
+.pick-verdict.v-miss { color: #ffc2cc; background: rgba(255, 77, 109, 0.16); }
+.pick-verdict.v-none { color: var(--text-dim); background: rgba(255, 255, 255, 0.06); }
+.pick-verdict.v-live { color: #ffd7df; background: rgba(255, 77, 109, 0.18); }
 
 /* Penalty winner picker (appears under score row when KO + tied) */
 .pk-picker-row {
