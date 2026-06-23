@@ -1392,12 +1392,16 @@ function getKnockoutAssignments() {
   const winners = {};
   const runnersUp = {};
   const thirds = [];
+  // Group positions that are mathematically locked (even before the group is
+  // finished) so clinched teams drop into their A1/A2 knockout slots early.
+  const locked = {};
 
   for (const letter of Object.keys(GROUPS)) {
     const s = computeStandings(letter);
     if (s[0]) winners[letter] = s[0].team;
     if (s[1]) runnersUp[letter] = s[1].team;
     if (s[2]) thirds.push({ group: letter, ...s[2] });
+    if (!complete) locked[letter] = groupClinch(letter).locked;
   }
 
   thirds.sort((a, b) =>
@@ -1447,15 +1451,27 @@ function getKnockoutAssignments() {
     }
   }
 
-  return { complete, winners, runnersUp, top8, thirdsAssignments };
+  return { complete, winners, runnersUp, locked, top8, thirdsAssignments };
 }
 
 function resolveTeamName(placeholder, m, pos, ko) {
-  if (!ko || !ko.complete) return null;
+  if (!ko) return null;
   let match;
-  if ((match = placeholder.match(/^([A-L])1$/))) return ko.winners[match[1]] || null;
-  if ((match = placeholder.match(/^([A-L])2$/))) return ko.runnersUp[match[1]] || null;
+  // Group winner / runner-up: use the final order once complete, otherwise fall
+  // back to a mathematically-locked position (clinched team) if there is one.
+  if ((match = placeholder.match(/^([A-L])1$/))) {
+    const L = match[1];
+    if (ko.complete) return ko.winners[L] || null;
+    return (ko.locked && ko.locked[L] && ko.locked[L][1]) || null;
+  }
+  if ((match = placeholder.match(/^([A-L])2$/))) {
+    const L = match[1];
+    if (ko.complete) return ko.runnersUp[L] || null;
+    return (ko.locked && ko.locked[L] && ko.locked[L][2]) || null;
+  }
+  // Best-third slots still need the full group stage finished.
   if (placeholder.startsWith("3rd ")) {
+    if (!ko.complete) return null;
     const a = ko.thirdsAssignments[`${matchId(m)}:${pos}`];
     return a ? a.team : null;
   }
@@ -1641,91 +1657,108 @@ function computeStandings(groupLetter, resolveResult = getResult, applyOverride 
 // within each, uses scorelines maximally adversarial to the team being tested,
 // then runs the real FIFA-2026 tiebreakers via computeStandings(). This catches
 // clinches that are locked by head-to-head before they show on raw points.
-// Returns { team: "champ"|"qualified"|"out" }. "out" = can't even reach the top
-// 3 in any completion (4th never advances, and best-thirds are 3rd-placed teams),
-// so the team is mathematically eliminated.
-function clinchStatus(groupLetter) {
+// Tiebreaker-aware group analysis. Enumerates every win/draw/loss combination of
+// the not-yet-final matches and runs the real FIFA-2026 tiebreakers via
+// computeStandings(), using scorelines adversarial (worst rank) or favorable
+// (best rank) to each team. Returns:
+//   status: { team: "champ"|"qualified"|"out" }
+//     champ     = guaranteed 1st            qualified = guaranteed top 2
+//     out       = can't reach the top 3 (eliminated; 4th never advances and
+//                 best-thirds are 3rd-placed teams)
+//   locked: { 1: team, 2: team }  group positions that are mathematically fixed,
+//           so they can be dropped straight into the A1 / A2 knockout slots.
+const _groupClinchCache = new Map(); // letter -> { sig, value } — clinch depends only on FINAL results
+function groupClinch(groupLetter) {
   const teams = GROUPS[groupLetter];
 
-  // Split this group's matches into final (locked result) and remaining.
+  // Split this group's matches into final (locked result) and remaining, and
+  // build a signature of the final results (the only thing clinch depends on —
+  // a live, in-progress match doesn't change it until it ends).
   const finalIds = new Set();
   const remaining = [];
+  const sigParts = [];
   for (const m of FIXTURES) {
     if (m.stage !== "group" || m.group !== groupLetter) continue;
     const r = getResult(m);
     const ended = formatCountdown(m).state === "ended";
     const live = typeof liveScores !== "undefined" && liveScores.get(matchId(m)) && liveScores.get(matchId(m)).isLive;
-    if (ended && !live && r && r.score1 !== undefined && r.score2 !== undefined) finalIds.add(matchId(m));
-    else remaining.push(m);
+    if (ended && !live && r && r.score1 !== undefined && r.score2 !== undefined) {
+      finalIds.add(matchId(m));
+      sigParts.push(`${r.score1}-${r.score2}`);
+    } else {
+      remaining.push(m);
+      sigParts.push("x");
+    }
   }
+  const sig = sigParts.join(",");
+  const cached = _groupClinchCache.get(groupLetter);
+  if (cached && cached.sig === sig) return cached.value;
 
-  const status = {};
-  // Clinching is impossible this early; also caps the enumeration (3^5 = 243).
-  if (remaining.length > 5) return status;
+  const status = {}, locked = {};
+  // Nothing can be clinched this early; also caps the enumeration (3^5 = 243).
+  if (remaining.length > 5) { const v = { status, locked }; _groupClinchCache.set(groupLetter, { sig, value: v }); return v; }
 
   const BIG = 50; // dominates any realistic group goal difference
+  const total = Math.pow(3, remaining.length);
 
-  // Worst (highest) finishing index for X over all completions — scorelines are
-  // chosen to push X as low as possible: rivals win big, X wins by the minimum.
+  // favor=false → scorelines push X as low as possible; favor=true → as high.
+  const resolverFor = (X, favor, outcome) => (m) => {
+    const id = matchId(m);
+    if (finalIds.has(id)) return getResult(m);
+    const o = outcome.get(id);                   // 0 = team1 win, 1 = draw, 2 = team2 win
+    if (o === undefined) return undefined;
+    if (o === 1) return { score1: 0, score2: 0 };
+    if (favor) {
+      if (o === 0) return { score1: m.team1 === X ? BIG : 1, score2: 0 };
+      return { score1: 0, score2: m.team2 === X ? BIG : 1 };
+    }
+    if (o === 0) return { score1: m.team1 === X ? 1 : BIG, score2: 0 };
+    return { score1: 0, score2: m.team2 === X ? 1 : BIG };
+  };
+  const forEachCombo = (cb) => {
+    for (let c = 0; c < total; c++) {
+      let n = c;
+      const outcome = new Map();
+      for (const m of remaining) { outcome.set(matchId(m), n % 3); n = Math.floor(n / 3); }
+      if (cb(outcome) === false) break;
+    }
+  };
+  // Highest (worst) index X can finish at, across all completions.
   const worstRank = (X) => {
     let worst = 0;
-    const total = Math.pow(3, remaining.length);
-    for (let c = 0; c < total; c++) {
-      let n = c;
-      const outcome = new Map();
-      for (const m of remaining) { outcome.set(matchId(m), n % 3); n = Math.floor(n / 3); }
-      const resolve = (m) => {
-        const id = matchId(m);
-        if (finalIds.has(id)) return getResult(m);
-        const o = outcome.get(id);                 // 0 = team1 win, 1 = draw, 2 = team2 win
-        if (o === undefined) return undefined;
-        if (o === 1) return { score1: 0, score2: 0 };
-        if (o === 0) return { score1: m.team1 === X ? 1 : BIG, score2: 0 };
-        return { score1: 0, score2: m.team2 === X ? 1 : BIG };
-      };
-      const order = computeStandings(groupLetter, resolve, false);
-      const rank = order.findIndex(s => s.team === X);
+    forEachCombo((o) => {
+      const rank = computeStandings(groupLetter, resolverFor(X, false, o), false).findIndex(s => s.team === X);
       if (rank > worst) worst = rank;
-      if (worst >= 2) break;   // already out of the top 2 in some scenario
-    }
+      if (worst >= 2) return false;   // already out of the top 2 somewhere
+    });
     return worst;
   };
-
-  // Best (lowest) finishing index for X over all completions — scorelines chosen
-  // to lift X as high as possible (X wins big, rivals win by the minimum). Used to
-  // tell whether X can still reach the top 3 at all.
-  const bestRank = (X) => {
-    let best = 3;
-    const total = Math.pow(3, remaining.length);
-    for (let c = 0; c < total; c++) {
-      let n = c;
-      const outcome = new Map();
-      for (const m of remaining) { outcome.set(matchId(m), n % 3); n = Math.floor(n / 3); }
-      const resolve = (m) => {
-        const id = matchId(m);
-        if (finalIds.has(id)) return getResult(m);
-        const o = outcome.get(id);
-        if (o === undefined) return undefined;
-        if (o === 1) return { score1: 0, score2: 0 };
-        if (o === 0) return { score1: m.team1 === X ? BIG : 1, score2: 0 };
-        return { score1: 0, score2: m.team2 === X ? BIG : 1 };
-      };
-      const order = computeStandings(groupLetter, resolve, false);
-      const rank = order.findIndex(s => s.team === X);
-      if (rank < best) best = rank;
-      if (best <= 2) break;   // can still reach the top 3 → not eliminated
-    }
-    return best;
+  // Does any completion let X finish at index <= target? (favorable scorelines)
+  const canReach = (X, target) => {
+    let ok = false;
+    forEachCombo((o) => {
+      const rank = computeStandings(groupLetter, resolverFor(X, true, o), false).findIndex(s => s.team === X);
+      if (rank <= target) { ok = true; return false; }
+    });
+    return ok;
   };
 
   for (const t of teams) {
     const w = worstRank(t);
-    if (w === 0) status[t] = "champ";
-    else if (w === 1) status[t] = "qualified";
-    else if (bestRank(t) === 3) status[t] = "out";
+    if (w === 0) { status[t] = "champ"; locked[1] = t; }       // always 1st
+    else if (w === 1) {
+      status[t] = "qualified";
+      if (!canReach(t, 0)) locked[2] = t;                       // never 1st, never below 2nd → fixed 2nd
+    } else if (!canReach(t, 2)) {
+      status[t] = "out";                                        // can't reach the top 3
+    }
   }
-  return status;
+  const value = { status, locked };
+  _groupClinchCache.set(groupLetter, { sig, value });
+  return value;
 }
+
+function clinchStatus(groupLetter) { return groupClinch(groupLetter).status; }
 
 function buildStandingsTable(letter, thirdQualifyingGroups) {
   const rows = computeStandings(letter);
