@@ -2027,6 +2027,34 @@ html:has(body.modal-open) {
   display: table-cell;
 }
 
+/* Clinched-position badge (group winner secured / qualified) */
+.clinch-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.clinch-champ {
+  color: #0b1020;
+  background: var(--gold);
+}
+.clinch-qualified {
+  color: #b7f7c8;
+  background: rgba(46, 204, 113, 0.18);
+  border: 1px solid rgba(46, 204, 113, 0.4);
+}
+.clinch-out {
+  color: #ffb3bd;
+  background: rgba(255, 77, 109, 0.16);
+  border: 1px solid rgba(255, 77, 109, 0.4);
+}
+.standings-table tr.eliminated-row td {
+  opacity: 0.6;
+}
+
 .standings-table .pts {
   color: var(--gold);
   font-weight: 700;

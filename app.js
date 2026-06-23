@@ -1505,7 +1505,10 @@ function getKnockoutOutcome(m, role, ko) {
   return role === "winner" ? winner : loser;
 }
 
-function computeStandings(groupLetter) {
+// resolveResult lets callers inject hypothetical results (used by clinchStatus's
+// enumeration); applyOverride=false skips the admin manual reordering so the
+// returned order reflects pure on-pitch computation.
+function computeStandings(groupLetter, resolveResult = getResult, applyOverride = true) {
   const teams = GROUPS[groupLetter];
   const stats = {};
   teams.forEach(t => {
@@ -1515,7 +1518,7 @@ function computeStandings(groupLetter) {
   const playedMatches = []; // for head-to-head tiebreaks
   for (const m of FIXTURES) {
     if (m.stage !== "group" || m.group !== groupLetter) continue;
-    const r = getResult(m);
+    const r = resolveResult(m);
     if (!r || r.score1 === undefined || r.score2 === undefined) continue;
     const a = stats[m.team1], b = stats[m.team2];
     if (!a || !b) continue;
@@ -1614,7 +1617,7 @@ function computeStandings(groupLetter) {
   }
 
   // Apply admin override (manual reordering) if present for this group.
-  const override = state.standingsOverride[groupLetter];
+  const override = applyOverride ? state.standingsOverride[groupLetter] : null;
   if (override && Array.isArray(override) && override.length > 0) {
     const byName = new Map(sorted.map(r => [r.team, r]));
     const ordered = [];
@@ -1632,8 +1635,101 @@ function computeStandings(groupLetter) {
   return sorted;
 }
 
+// Tiebreaker-aware clinch detection: which teams have mathematically secured 1st
+// place or a top-2 (knockout) spot, no matter how the remaining group matches go.
+// Enumerates every win/draw/loss combination of the not-yet-final matches and,
+// within each, uses scorelines maximally adversarial to the team being tested,
+// then runs the real FIFA-2026 tiebreakers via computeStandings(). This catches
+// clinches that are locked by head-to-head before they show on raw points.
+// Returns { team: "champ"|"qualified"|"out" }. "out" = can't even reach the top
+// 3 in any completion (4th never advances, and best-thirds are 3rd-placed teams),
+// so the team is mathematically eliminated.
+function clinchStatus(groupLetter) {
+  const teams = GROUPS[groupLetter];
+
+  // Split this group's matches into final (locked result) and remaining.
+  const finalIds = new Set();
+  const remaining = [];
+  for (const m of FIXTURES) {
+    if (m.stage !== "group" || m.group !== groupLetter) continue;
+    const r = getResult(m);
+    const ended = formatCountdown(m).state === "ended";
+    const live = typeof liveScores !== "undefined" && liveScores.get(matchId(m)) && liveScores.get(matchId(m)).isLive;
+    if (ended && !live && r && r.score1 !== undefined && r.score2 !== undefined) finalIds.add(matchId(m));
+    else remaining.push(m);
+  }
+
+  const status = {};
+  // Clinching is impossible this early; also caps the enumeration (3^5 = 243).
+  if (remaining.length > 5) return status;
+
+  const BIG = 50; // dominates any realistic group goal difference
+
+  // Worst (highest) finishing index for X over all completions — scorelines are
+  // chosen to push X as low as possible: rivals win big, X wins by the minimum.
+  const worstRank = (X) => {
+    let worst = 0;
+    const total = Math.pow(3, remaining.length);
+    for (let c = 0; c < total; c++) {
+      let n = c;
+      const outcome = new Map();
+      for (const m of remaining) { outcome.set(matchId(m), n % 3); n = Math.floor(n / 3); }
+      const resolve = (m) => {
+        const id = matchId(m);
+        if (finalIds.has(id)) return getResult(m);
+        const o = outcome.get(id);                 // 0 = team1 win, 1 = draw, 2 = team2 win
+        if (o === undefined) return undefined;
+        if (o === 1) return { score1: 0, score2: 0 };
+        if (o === 0) return { score1: m.team1 === X ? 1 : BIG, score2: 0 };
+        return { score1: 0, score2: m.team2 === X ? 1 : BIG };
+      };
+      const order = computeStandings(groupLetter, resolve, false);
+      const rank = order.findIndex(s => s.team === X);
+      if (rank > worst) worst = rank;
+      if (worst >= 2) break;   // already out of the top 2 in some scenario
+    }
+    return worst;
+  };
+
+  // Best (lowest) finishing index for X over all completions — scorelines chosen
+  // to lift X as high as possible (X wins big, rivals win by the minimum). Used to
+  // tell whether X can still reach the top 3 at all.
+  const bestRank = (X) => {
+    let best = 3;
+    const total = Math.pow(3, remaining.length);
+    for (let c = 0; c < total; c++) {
+      let n = c;
+      const outcome = new Map();
+      for (const m of remaining) { outcome.set(matchId(m), n % 3); n = Math.floor(n / 3); }
+      const resolve = (m) => {
+        const id = matchId(m);
+        if (finalIds.has(id)) return getResult(m);
+        const o = outcome.get(id);
+        if (o === undefined) return undefined;
+        if (o === 1) return { score1: 0, score2: 0 };
+        if (o === 0) return { score1: m.team1 === X ? BIG : 1, score2: 0 };
+        return { score1: 0, score2: m.team2 === X ? BIG : 1 };
+      };
+      const order = computeStandings(groupLetter, resolve, false);
+      const rank = order.findIndex(s => s.team === X);
+      if (rank < best) best = rank;
+      if (best <= 2) break;   // can still reach the top 3 → not eliminated
+    }
+    return best;
+  };
+
+  for (const t of teams) {
+    const w = worstRank(t);
+    if (w === 0) status[t] = "champ";
+    else if (w === 1) status[t] = "qualified";
+    else if (bestRank(t) === 3) status[t] = "out";
+  }
+  return status;
+}
+
 function buildStandingsTable(letter, thirdQualifyingGroups) {
   const rows = computeStandings(letter);
+  const clinch = clinchStatus(letter);
   const table = document.createElement("div");
   table.className = "standings-table";
   table.dataset.group = letter;
@@ -1664,10 +1760,18 @@ function buildStandingsTable(letter, thirdQualifyingGroups) {
                  <button class="row-move-btn" data-group="${letter}" data-from="${i}" data-dir="1" ${i === rows.length - 1 ? "disabled" : ""} title="Move down">▼</button>
                </span>`
       : "";
+    const clinchBadge = clinch[r.team] === "champ"
+      ? `<span class="clinch-badge clinch-champ" title="Group winner secured — can't be caught">🏆 1st</span>`
+      : clinch[r.team] === "qualified"
+        ? `<span class="clinch-badge clinch-qualified" title="Qualified — top-2 spot secured">✓ Qualified</span>`
+        : clinch[r.team] === "out"
+          ? `<span class="clinch-badge clinch-out" title="Eliminated — can't reach the top 3">❌ Out</span>`
+          : "";
+    const rowCls = cls + (clinch[r.team] === "out" ? " eliminated-row" : "");
     return `
-          <tr class="${cls}">
+          <tr class="${rowCls}">
             <td class="pos">${i + 1}${moveBtns}</td>
-            <td class="team-col"><span class="flag">${flagFor(r.team)}</span>${r.team}</td>
+            <td class="team-col"><span class="flag">${flagFor(r.team)}</span>${r.team}${clinchBadge}</td>
             <td>${r.played}</td>
             <td>${r.wins}</td>
             <td>${r.draws}</td>
