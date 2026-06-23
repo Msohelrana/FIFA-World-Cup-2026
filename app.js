@@ -3004,6 +3004,13 @@ function unlockPointAudio() {
   try {
     _pointAudioCtx = _pointAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
     if (_pointAudioCtx.state === "suspended") _pointAudioCtx.resume();
+    // iOS needs an actual sound played *inside* the user gesture to fully unlock
+    // Web Audio. Play a 1-frame silent buffer to satisfy that.
+    const buf = _pointAudioCtx.createBuffer(1, 1, 22050);
+    const src = _pointAudioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(_pointAudioCtx.destination);
+    src.start(0);
   } catch { /* no audio support */ }
 }
 function playPointChangeSound(up) {
