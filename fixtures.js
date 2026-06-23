@@ -88,7 +88,7 @@ const FIXTURES = [
   { stage: "group", group: "J", date: "2026-06-22", time: "23:00 ET", team1: "Jordan", team2: "Algeria", venue: "Santa Clara, CA" },
 
   // June 23
-  { stage: "group", group: "K", date: "2026-06-23", time: "13:00 ET", team1: "Portugal", team2: "Uzbekistan", venue: "Houston" },
+  { stage: "group", group: "K", date: "2026-06-23", time: "4:00 ET", team1: "Portugal", team2: "Uzbekistan", venue: "Houston" },
   { stage: "group", group: "L", date: "2026-06-23", time: "16:00 ET", team1: "England", team2: "Ghana", venue: "Foxborough, MA" },
   { stage: "group", group: "L", date: "2026-06-23", time: "19:00 ET", team1: "Panama", team2: "Croatia", venue: "Toronto" },
   { stage: "group", group: "K", date: "2026-06-23", time: "22:00 ET", team1: "Colombia", team2: "DR Congo", venue: "Zapopan, Mexico" },
