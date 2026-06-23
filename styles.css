@@ -4289,6 +4289,23 @@ footer {
   margin: 0 3px;
 }
 
+.upred-team {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.upred-team .flag {
+  flex-shrink: 0;
+}
+/* Normal flags on desktop; shrink them on mobile */
+@media (max-width: 600px) {
+  .upred-team .flag-img {
+    width: 15px;
+    height: 10px;
+  }
+}
+
 .upred-stage-row td {
   background: rgba(76, 201, 240, 0.07);
   color: var(--accent-2);

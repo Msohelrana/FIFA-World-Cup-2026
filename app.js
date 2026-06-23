@@ -2871,7 +2871,7 @@ function openUserPredictionsModal(userId, userName) {
 
       tableHTML += `
         <tr class="upred-row ${rowClass}${isLive ? " upred-row-live" : ""}">
-          <td class="upred-td-match">${isLive ? '<span class="upred-live-dot" title="Live now">🔴</span> ' : ""}${escapeHTML(displayT1)} <span class="upred-vs">vs</span> ${escapeHTML(displayT2)}</td>
+          <td class="upred-td-match">${isLive ? '<span class="upred-live-dot" title="Live now">🔴</span> ' : ""}<span class="upred-team"><span class="flag">${flagFor(displayT1)}</span>${escapeHTML(displayT1)}</span> <span class="upred-vs">vs</span> <span class="upred-team"><span class="flag">${flagFor(displayT2)}</span>${escapeHTML(displayT2)}</span></td>
           <td class="upred-td-pick">${predCell}</td>
           <td class="upred-td-result">${resultCell}</td>
           <td class="upred-td-pts">${ptsCell}</td>
