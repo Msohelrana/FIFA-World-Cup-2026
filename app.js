@@ -5164,7 +5164,6 @@ updateProgressBar();
   function openSidebar() {
     sidebar.classList.add("open");
     overlay.classList.add("open");
-    sidebar.setAttribute("aria-hidden", "false");
     menuBtn.setAttribute("aria-expanded", "true");
     document.body.style.overflow = "hidden";
   }
@@ -5172,7 +5171,6 @@ updateProgressBar();
   function closeSidebar() {
     sidebar.classList.remove("open");
     overlay.classList.remove("open");
-    sidebar.setAttribute("aria-hidden", "true");
     menuBtn.setAttribute("aria-expanded", "false");
     document.body.style.overflow = "";
   }

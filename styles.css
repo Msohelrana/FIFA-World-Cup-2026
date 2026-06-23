@@ -2525,79 +2525,39 @@ footer {
 }
 
 @media (max-width: 640px) {
-  /* Hamburger button — fixed to top-left on mobile */
+  /* Hamburger + overlay not used — navigation is a fixed bottom bar */
   .hero-menu-btn {
-    display: flex;
-    position: fixed;
-    top: 12px;
-    left: 14px;
-    z-index: 201;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    background: rgba(11, 16, 32, 0.72);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    color: var(--text);
-    cursor: pointer;
+    display: none;
   }
 
-  /* Dim overlay behind sidebar */
   .sidebar-overlay {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 299;
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.25s;
+    display: none;
   }
 
-  .sidebar-overlay.open {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  /* Sidebar panel */
+  /* Navigation as a fixed horizontal bottom bar — all tabs fit, no scrolling */
   .mobile-sidebar {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     position: fixed;
-    top: 0;
+    top: auto;
     left: 0;
+    right: 0;
     bottom: 0;
-    width: 76vw;
-    max-width: 300px;
+    width: 100%;
+    max-width: none;
     z-index: 300;
     background: var(--bg-elev);
-    border-right: 1px solid var(--border);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
     padding-bottom: env(safe-area-inset-bottom);
-    transform: translateX(-100%);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow-y: auto;
+    transform: none;
+    overflow: hidden;
     overscroll-behavior: contain;
   }
 
-  .mobile-sidebar.open {
-    transform: translateX(0);
-    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.5);
-  }
-
-  /* Sidebar header row */
+  /* Header (title + close) belongs to the old drawer — hidden in the bottom bar */
   .sidebar-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 18px 20px 14px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
+    display: none;
   }
 
   .sidebar-title {
@@ -2628,41 +2588,52 @@ footer {
     color: var(--text);
   }
 
-  /* Nav items list */
+  /* Nav items — single horizontal row across the bottom (swipe for overflow) */
   .sidebar-nav-items {
     display: flex;
-    flex-direction: column;
-    padding: 10px 0;
-    flex: 1;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 0;
+    width: 100%;
   }
 
   .mobile-sidebar .tab {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
-    gap: 14px;
-    width: 100%;
-    padding: 13px 20px;
+    justify-content: flex-start;
+    gap: 4px;
+    flex: 1 1 0;
+    min-width: 0;          /* equal columns that all fit across the screen */
+    padding: 7px 2px;
     background: transparent;
     border: none;
     border-radius: 0;
     color: var(--text-dim);
-    font-size: 15px;
+    font-size: 9px;
     font-weight: 500;
-    text-align: left;
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;    /* let two-word labels wrap to a second line */
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     transition: background 0.15s, color 0.15s;
   }
 
+  .mobile-sidebar .tab svg {
+    width: 19px;
+    height: 19px;
+  }
+
   .mobile-sidebar .tab:hover {
-    background: rgba(255, 255, 255, 0.05);
     color: var(--text);
   }
 
   .mobile-sidebar .tab.active {
     color: var(--accent-2);
-    background: rgba(76, 201, 240, 0.08);
+    background: rgba(76, 201, 240, 0.1);
+    box-shadow: inset 0 2px 0 var(--accent-2);
   }
 
   .mobile-sidebar .tab.active svg {
@@ -2677,18 +2648,27 @@ footer {
   .mobile-sidebar .tab.active svg {
     opacity: 1;
   }
+
+  /* Leave room for the fixed bottom nav bar */
+  .container {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+
+  footer {
+    margin-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
 }
 
 /* ---------- Responsive ---------- */
 @media (max-width: 600px) {
 
-  /* Tighter hero on small phones — left pad clears the hamburger button */
+  /* Tighter hero on small phones — no hamburger now, normal left padding */
   .hero {
-    padding: 40px 18px 32px 62px;
+    padding: 40px 18px 32px;
   }
 
   .container {
-    padding: 20px 14px 24px;
+    padding: 20px 14px calc(70px + env(safe-area-inset-bottom));
   }
 
   /* Sticky filter bar → static column on mobile */
