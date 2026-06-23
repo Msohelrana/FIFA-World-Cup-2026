@@ -73,6 +73,23 @@ body {
   color: #d9b8ff;
 }
 
+.hero-top5-btn {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.admin-btn.hero-top5-btn {
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.2), rgba(255, 159, 28, 0.12));
+  border-color: rgba(255, 209, 102, 0.5);
+  color: var(--gold);
+}
+
+.admin-btn.hero-top5-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.34), rgba(255, 159, 28, 0.22));
+  border-color: rgba(255, 209, 102, 0.8);
+  color: #ffe08a;
+}
+
 .hero-user-btn.is-active {
   background: rgba(76, 201, 240, 0.18);
   color: var(--accent-2);
@@ -90,7 +107,8 @@ body {
   }
 
   .hero-user-btn,
-  .hero-settings-btn {
+  .hero-settings-btn,
+  .hero-top5-btn {
     padding: 7px 11px;
     font-size: 12px;
   }
@@ -100,7 +118,8 @@ body {
   }
 
   .hero-user-btn .btn-label,
-  .hero-settings-btn .btn-label {
+  .hero-settings-btn .btn-label,
+  .hero-top5-btn .btn-label {
     display: none;
   }
 }
