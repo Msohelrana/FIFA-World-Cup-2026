@@ -2994,6 +2994,66 @@ function renderTop5Rows() {
   }).join("");
 }
 
+// uid → last shown total, so we can count-up animate when a score changes.
+const _top5Totals = new Map();
+
+// Shared audio context, unlocked on drawer open (a user gesture) so the
+// point-change sound is allowed to play on later live updates.
+let _pointAudioCtx = null;
+function unlockPointAudio() {
+  try {
+    _pointAudioCtx = _pointAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (_pointAudioCtx.state === "suspended") _pointAudioCtx.resume();
+  } catch { /* no audio support */ }
+}
+function playPointChangeSound(up) {
+  try {
+    if (!_pointAudioCtx) return;            // not unlocked yet
+    const ctx = _pointAudioCtx;
+    if (ctx.state === "suspended") ctx.resume();
+    const master = ctx.createGain();
+    master.gain.setValueAtTime(0.2, ctx.currentTime);
+    master.connect(ctx.destination);
+    const notes = up ? [659.25, 987.77] : [493.88, 329.63];   // up: E5→B5, down: B4→E4
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = freq;
+      const t0 = ctx.currentTime + i * 0.1;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      osc.connect(g); g.connect(master);
+      osc.start(t0); osc.stop(t0 + 0.24);
+    });
+  } catch { /* ignore */ }
+}
+
+// Tween an element's number from `from` to `to` with a "pop" and a floating
+// ▲/▼ delta badge showing how many points were gained/lost.
+function animateCount(el, from, to) {
+  const delta = to - from;
+  const row = el.closest(".top5-row");
+  if (row) {
+    const badge = document.createElement("span");
+    badge.className = "top5-delta " + (delta > 0 ? "up" : "down");
+    badge.textContent = (delta > 0 ? "▲ +" : "▼ ") + delta;
+    row.appendChild(badge);
+    badge.addEventListener("animationend", () => badge.remove(), { once: true });
+  }
+  el.classList.add("top5-pts-bump");
+  const dur = 1500, start = performance.now();
+  const step = (now) => {
+    const t = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - t, 3);   // ease-out
+    el.textContent = String(Math.round(from + (to - from) * eased));
+    if (t < 1) requestAnimationFrame(step);
+    else { el.textContent = String(to); el.classList.remove("top5-pts-bump"); }
+  };
+  requestAnimationFrame(step);
+}
+
 function refreshTop5Drawer() {
   const list = document.querySelector("#top5Drawer .top5-list");
   if (!list) return;
@@ -3002,6 +3062,21 @@ function refreshTop5Drawer() {
   const firstPos = new Map();
   list.querySelectorAll(".top5-row[data-uid]").forEach(r => firstPos.set(r.dataset.uid, r.getBoundingClientRect().top));
   list.innerHTML = renderTop5Rows();
+  // Count-up animate any total that changed since the last render.
+  let anyChange = false, anyUp = false;
+  list.querySelectorAll(".top5-row[data-uid]").forEach(r => {
+    const uid = r.dataset.uid;
+    const ptsEl = r.querySelector(".top5-pts");
+    const newTotal = Number(ptsEl.textContent);
+    const prevTotal = _top5Totals.get(uid);
+    if (prevTotal !== undefined && prevTotal !== newTotal) {
+      animateCount(ptsEl, prevTotal, newTotal);
+      anyChange = true;
+      if (newTotal > prevTotal) anyUp = true;
+    }
+    _top5Totals.set(uid, newTotal);
+  });
+  if (anyChange) playPointChangeSound(anyUp);   // one sound per update, not per row
   if (firstPos.size === 0) return;
   requestAnimationFrame(() => {
     list.querySelectorAll(".top5-row[data-uid]").forEach(r => {
@@ -3023,12 +3098,14 @@ function refreshTop5Drawer() {
 function closeTop5Drawer() {
   const drawer = document.getElementById("top5Drawer");
   if (!drawer) return;
+  _top5Totals.clear();   // fresh baseline next time it opens
   drawer.classList.remove("open");
   drawer.addEventListener("transitionend", () => drawer.remove(), { once: true });
 }
 
 function openTop5Drawer() {
   if (document.getElementById("top5Drawer")) return;
+  unlockPointAudio();   // this click is a user gesture → audio allowed afterwards
   // Reuse the one shared collection listener — attach it only if not already on.
   if (userPicksSync.available && !state.leaderboardLoaded) {
     state.leaderboardLoaded = true;
@@ -3054,6 +3131,10 @@ function openTop5Drawer() {
 
   document.body.appendChild(drawer);
   requestAnimationFrame(() => drawer.classList.add("open"));
+
+  // Seed baseline totals so the first live change animates (no pop on open).
+  drawer.querySelectorAll(".top5-row[data-uid]").forEach(r =>
+    _top5Totals.set(r.dataset.uid, Number(r.querySelector(".top5-pts").textContent)));
 
   drawer.querySelector(".top5-drawer-close").addEventListener("click", closeTop5Drawer);
   drawer.querySelector(".top5-viewfull").addEventListener("click", () => { closeTop5Drawer(); switchView("leaderboard"); });

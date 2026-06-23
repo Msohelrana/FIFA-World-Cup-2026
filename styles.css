@@ -3161,6 +3161,7 @@ footer {
   gap: 8px;
 }
 .top5-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -3168,6 +3169,24 @@ footer {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
+}
+/* Floating ▲/▼ delta that rises above the points when a score changes */
+.top5-delta {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+  white-space: nowrap;
+  animation: top5DeltaFloat 1.5s ease-out forwards;
+}
+.top5-delta.up { color: #54e08a; }
+.top5-delta.down { color: #ff6d82; }
+@keyframes top5DeltaFloat {
+  0%   { opacity: 0; transform: translateY(-50%); }
+  20%  { opacity: 1; transform: translateY(-130%); }
+  100% { opacity: 0; transform: translateY(-280%); }
 }
 /* Distinct background per rank — gold, silver, bronze, then two accents */
 .top5-list .top5-row:nth-child(1) { background: rgba(255, 209, 102, 0.16); border-color: rgba(255, 209, 102, 0.5); }
@@ -3205,6 +3224,17 @@ footer {
   flex-shrink: 0;
   font-weight: 800;
   color: var(--gold);
+  display: inline-block;
+  transform-origin: center;
+}
+/* Brief "pop" + brighten while a score counts up to its new value */
+.top5-pts-bump {
+  animation: top5PtsBump 1.5s ease-out;
+}
+@keyframes top5PtsBump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.4); color: #fff; text-shadow: 0 0 10px rgba(255, 209, 102, 0.8); }
+  100% { transform: scale(1); }
 }
 .top5-empty {
   color: var(--text-dim);
