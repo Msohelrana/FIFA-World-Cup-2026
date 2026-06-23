@@ -7,6 +7,7 @@ const els = {
   clearBtn: document.getElementById("clearBtn"),
   userBtn: document.getElementById("userBtn"),
   settingsBtn: document.getElementById("settingsBtn"),
+  top5Btn: document.getElementById("top5Btn"),
   scheduleView: document.getElementById("scheduleView"),
   groupsView: document.getElementById("groupsView"),
   standingsView: document.getElementById("standingsView"),
@@ -379,6 +380,7 @@ function rerenderActive() {
   else if (state.view === "predict") renderPredict();
   else if (state.view === "picks") renderPicks();
   else if (state.view === "leaderboard") renderLeaderboardView();
+  refreshTop5Drawer();   // keep the Top-5 drawer live on any data change (no-op if closed)
   updateProgressBar();
 }
 
@@ -2972,6 +2974,93 @@ function renderPicksLeaderboard() {
   return wrap;
 }
 
+// ===== Top-5 live drawer (Match Predict tab) =====
+// Reuses the single shared userpicks listener — no extra Firestore reads beyond
+// the leaderboard that's already loaded. Just renders the top 5 of the same
+// in-memory ranking.
+function renderTop5Rows() {
+  const rows = computeLeaderboard().slice(0, 5);
+  if (rows.length === 0) return `<p class="top5-empty">No scored predictions yet.</p>`;
+  const myId = state.currentUser && state.currentUser.id;
+  return rows.map(r => {
+    const medal = r.rank === 1 ? "🥇" : r.rank === 2 ? "🥈" : r.rank === 3 ? "🥉" : `<span class="top5-rank-num">${r.rank}</span>`;
+    const isMe = myId === r.userId;
+    return `
+      <div class="top5-row${isMe ? " is-me" : ""}" data-uid="${escapeHTML(r.userId)}">
+        <span class="top5-rank">${medal}</span>
+        <span class="top5-name">${lbAvatar(r.userName)}${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</span>
+        <span class="top5-pts">${r.total}</span>
+      </div>`;
+  }).join("");
+}
+
+function refreshTop5Drawer() {
+  const list = document.querySelector("#top5Drawer .top5-list");
+  if (!list) return;
+  // FLIP: record each row's position before the rebuild, then slide it from its
+  // old spot to the new one — same live-standings animation as the leaderboard.
+  const firstPos = new Map();
+  list.querySelectorAll(".top5-row[data-uid]").forEach(r => firstPos.set(r.dataset.uid, r.getBoundingClientRect().top));
+  list.innerHTML = renderTop5Rows();
+  if (firstPos.size === 0) return;
+  requestAnimationFrame(() => {
+    list.querySelectorAll(".top5-row[data-uid]").forEach(r => {
+      const prev = firstPos.get(r.dataset.uid);
+      if (prev === undefined) return;
+      const delta = prev - r.getBoundingClientRect().top;
+      if (Math.abs(delta) < 1) return;
+      r.style.transition = "none";
+      r.style.transform = `translateY(${delta}px)`;
+      requestAnimationFrame(() => {
+        r.style.transition = "transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+        r.style.transform = "";
+        r.addEventListener("transitionend", () => { r.style.transition = ""; r.style.transform = ""; }, { once: true });
+      });
+    });
+  });
+}
+
+function closeTop5Drawer() {
+  const drawer = document.getElementById("top5Drawer");
+  if (!drawer) return;
+  drawer.classList.remove("open");
+  drawer.addEventListener("transitionend", () => drawer.remove(), { once: true });
+}
+
+function openTop5Drawer() {
+  if (document.getElementById("top5Drawer")) return;
+  // Reuse the one shared collection listener — attach it only if not already on.
+  if (userPicksSync.available && !state.leaderboardLoaded) {
+    state.leaderboardLoaded = true;
+    userPicksSync.subscribe();
+  }
+  const loading = userPicksSync.available && state.leaderboardUsers.length === 0;
+
+  // No backdrop: the drawer floats on the right so the rest of the page stays
+  // interactive (switch tabs, scroll, tap cards) while it's open. It only closes
+  // via the ✕ button or Esc.
+  const drawer = document.createElement("aside");
+  drawer.className = "top5-drawer";
+  drawer.id = "top5Drawer";
+  drawer.setAttribute("aria-label", "Top 5 leaderboard");
+  drawer.innerHTML = `
+    <div class="top5-drawer-header">
+      <span class="top5-drawer-title">🏆 Top 5 · Live</span>
+      <button type="button" class="top5-drawer-close" aria-label="Close">✕</button>
+    </div>
+    <div class="top5-list">${loading ? '<p class="top5-empty">Loading…</p>' : renderTop5Rows()}</div>
+    <button type="button" class="top5-viewfull">View full leaderboard →</button>
+  `;
+
+  document.body.appendChild(drawer);
+  requestAnimationFrame(() => drawer.classList.add("open"));
+
+  drawer.querySelector(".top5-drawer-close").addEventListener("click", closeTop5Drawer);
+  drawer.querySelector(".top5-viewfull").addEventListener("click", () => { closeTop5Drawer(); switchView("leaderboard"); });
+  const esc = (e) => { if (e.key === "Escape") { closeTop5Drawer(); document.removeEventListener("keydown", esc); } };
+  document.addEventListener("keydown", esc);
+}
+
 function renderLeaderboardView() {
   const view = els.leaderboardView;
 
@@ -4741,6 +4830,7 @@ const userPicksSync = (() => {
       });
       if (state.view === "picks") renderPicks();
       else if (state.view === "leaderboard") renderLeaderboardView();
+      refreshTop5Drawer();   // keep the Top-5 drawer live (no-op if closed)
     }, (err) => console.warn("User picks subscribe failed:", err.message || err));
   }
 
@@ -4763,6 +4853,13 @@ const userPicksSync = (() => {
 
   return { available: true, saveOwn, fetchOwn, fetchAll, subscribe, saveForUser };
 })();
+
+// Global Top-5 leaderboard drawer button (hero header) — shown on every tab when
+// the backend is available. Wired here, after userPicksSync is defined.
+if (els.top5Btn && userPicksSync.available) {
+  els.top5Btn.hidden = false;
+  els.top5Btn.addEventListener("click", openTop5Drawer);
+}
 
 // ===== Scoring engine =====
 const STAGE_MULTIPLIERS = {
@@ -5521,6 +5618,8 @@ if (typeof liveScores !== "undefined") {
     const archived = archiveFinishedApiResults();
     if (!changedIds.length && !archived) return;
     updateProgressBar();
+    // Results changed → leaderboard standings may shift; keep the Top-5 drawer live.
+    refreshTop5Drawer();
     // Don't rebuild the DOM under the admin's cursor mid-entry
     const ae = document.activeElement;
     if (ae && ae.closest && ae.closest(".pb-result, .scorer-form")) return;
