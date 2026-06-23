@@ -4287,6 +4287,7 @@ footer {
   color: var(--text-dim);
   font-size: 11px;
   margin: 0 3px;
+  vertical-align: middle;
 }
 
 .upred-team {
@@ -4294,6 +4295,7 @@ footer {
   align-items: center;
   gap: 5px;
   white-space: nowrap;
+  vertical-align: middle;
 }
 .upred-team .flag {
   flex-shrink: 0;
