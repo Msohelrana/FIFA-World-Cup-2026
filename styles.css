@@ -3171,18 +3171,19 @@ footer {
   border: 1px solid var(--border);
 }
 /* Floating ▲/▼ delta that rises above the points when a score changes */
-.top5-delta {
+.pts-delta {
   position: absolute;
-  right: 12px;
+  right: 10px;
   top: 50%;
   font-size: 12px;
   font-weight: 800;
   pointer-events: none;
   white-space: nowrap;
+  z-index: 2;
   animation: top5DeltaFloat 1.5s ease-out forwards;
 }
-.top5-delta.up { color: #54e08a; }
-.top5-delta.down { color: #ff6d82; }
+.pts-delta.up { color: #54e08a; }
+.pts-delta.down { color: #ff6d82; }
 @keyframes top5DeltaFloat {
   0%   { opacity: 0; transform: translateY(-50%); }
   20%  { opacity: 1; transform: translateY(-130%); }
@@ -3227,8 +3228,16 @@ footer {
   display: inline-block;
   transform-origin: center;
 }
-/* Brief "pop" + brighten while a score counts up to its new value */
-.top5-pts-bump {
+/* Leaderboard total value (inner span so the pop transform works inside a td) */
+.lb-total { position: relative; }
+.lb-total-val {
+  display: inline-block;
+  transform-origin: center;
+}
+/* Brief "pop" + brighten while a score counts up to its new value (both views) */
+.pts-bump {
+  display: inline-block;
+  transform-origin: center;
   animation: top5PtsBump 1.5s ease-out;
 }
 @keyframes top5PtsBump {

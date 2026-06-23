@@ -2917,7 +2917,7 @@ function renderPicksLeaderboard() {
       <tr class="${isMe ? "is-me" : ""} ${rankClass}" data-uid="${escapeHTML(r.userId)}">
         <td class="lb-rank">${medal} ${r.rank}${rankArrow}</td>
         <td class="lb-name">${viewBtn}${lbAvatar(r.userName)}${escapeHTML(r.userName)}${isMe ? ' <span class="lb-you">you</span>' : ""}</td>
-        <td class="lb-total">${r.total}</td>
+        <td class="lb-total"><span class="lb-total-val">${r.total}</span></td>
         <td class="lb-exact">${r.exactCount}</td>
         <td class="lb-outcome">${r.outcomeCount}</td>
         <td class="lb-gd">${r.gdCount}</td>
@@ -2995,7 +2995,8 @@ function renderTop5Rows() {
 }
 
 // uid → last shown total, so we can count-up animate when a score changes.
-const _top5Totals = new Map();
+const _top5Totals = new Map();   // Top-5 drawer
+const _lbTotals = new Map();     // full Leaderboard tab
 
 // Shared audio context, unlocked on drawer open (a user gesture) so the
 // point-change sound is allowed to play on later live updates.
@@ -3038,25 +3039,26 @@ function playPointChangeSound(up) {
 }
 
 // Tween an element's number from `from` to `to` with a "pop" and a floating
-// ▲/▼ delta badge showing how many points were gained/lost.
-function animateCount(el, from, to) {
+// ▲/▼ delta badge showing how many points were gained/lost. `badgeHost` is the
+// positioned ancestor the badge is appended to (defaults to the element's parent).
+function animateCount(el, from, to, badgeHost) {
   const delta = to - from;
-  const row = el.closest(".top5-row");
-  if (row) {
+  const host = badgeHost || el.parentElement;
+  if (host) {
     const badge = document.createElement("span");
-    badge.className = "top5-delta " + (delta > 0 ? "up" : "down");
+    badge.className = "pts-delta " + (delta > 0 ? "up" : "down");
     badge.textContent = (delta > 0 ? "▲ +" : "▼ ") + delta;
-    row.appendChild(badge);
+    host.appendChild(badge);
     badge.addEventListener("animationend", () => badge.remove(), { once: true });
   }
-  el.classList.add("top5-pts-bump");
+  el.classList.add("pts-bump");
   const dur = 1500, start = performance.now();
   const step = (now) => {
     const t = Math.min(1, (now - start) / dur);
     const eased = 1 - Math.pow(1 - t, 3);   // ease-out
     el.textContent = String(Math.round(from + (to - from) * eased));
     if (t < 1) requestAnimationFrame(step);
-    else { el.textContent = String(to); el.classList.remove("top5-pts-bump"); }
+    else { el.textContent = String(to); el.classList.remove("pts-bump"); }
   };
   requestAnimationFrame(step);
 }
@@ -3077,7 +3079,7 @@ function refreshTop5Drawer() {
     const newTotal = Number(ptsEl.textContent);
     const prevTotal = _top5Totals.get(uid);
     if (prevTotal !== undefined && prevTotal !== newTotal) {
-      animateCount(ptsEl, prevTotal, newTotal);
+      animateCount(ptsEl, prevTotal, newTotal, r);
       anyChange = true;
       if (newTotal > prevTotal) anyUp = true;
     }
@@ -3206,6 +3208,23 @@ function renderLeaderboardView() {
   }
 
   view.appendChild(renderPicksLeaderboard());
+
+  // Count-up + ▲/▼ badge + sound for any total that changed since last render.
+  let lbAnyChange = false, lbAnyUp = false;
+  view.querySelectorAll("tr[data-uid]").forEach(tr => {
+    const uid = tr.dataset.uid;
+    const valEl = tr.querySelector(".lb-total-val");
+    if (!valEl) return;
+    const newTotal = Number(valEl.textContent);
+    const prevTotal = _lbTotals.get(uid);
+    if (prevTotal !== undefined && prevTotal !== newTotal) {
+      animateCount(valEl, prevTotal, newTotal, tr.querySelector(".lb-total"));
+      lbAnyChange = true;
+      if (newTotal > prevTotal) lbAnyUp = true;
+    }
+    _lbTotals.set(uid, newTotal);
+  });
+  if (lbAnyChange) playPointChangeSound(lbAnyUp);
 
   // FLIP steps 2-4 — animate each row from its old pixel position to the new
   // one (translateY + transition), giving the live-standings slide effect.
@@ -4194,6 +4213,7 @@ function renderSummary(team, date) {
 // --- View switching ---
 function switchView(view) {
   state.view = view;
+  unlockPointAudio();   // tab tap is a user gesture → unlock the point-change sound
   try { localStorage.setItem("wc26_lastView", view); } catch { /* quota */ }
   els.tabs.forEach(t => {
     const active = t.dataset.view === view;
