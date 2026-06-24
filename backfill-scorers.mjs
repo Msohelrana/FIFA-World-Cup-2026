@@ -29,7 +29,7 @@ const localName = (n) => ALIAS[n] || n;
 // Load FIXTURES out of the classic-script fixtures.js without modifying it.
 const ctx = { __OUT: {} };
 vm.createContext(ctx);
-vm.runInContext(readFileSync("fixtures.js", "utf8") + "\n;__OUT.FIXTURES=FIXTURES;", ctx);
+vm.runInContext(readFileSync("js/fixtures.js", "utf8") + "\n;__OUT.FIXTURES=FIXTURES;", ctx);
 const FIXTURES = ctx.__OUT.FIXTURES;
 
 const matchId = (m) => `${m.date}_${m.team1}_${m.team2}`;

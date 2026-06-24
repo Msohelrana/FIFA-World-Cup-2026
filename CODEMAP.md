@@ -10,16 +10,48 @@ A quick index of **where everything lives**, so you can jump straight to the cod
 
 ## File overview
 
-| File | Lines | What it holds |
+The old monolithic `app.js` and `styles.css` were **split into smaller files** for
+maintainability. They are still plain global `<script>`/`<link>` files (no build step).
+
+> ⚠️ **The app scripts MUST load in the order below** (set in `index.html` and
+> `sw.js`'s `APP_SHELL`). Definitions come first; then `app-auth.js` →
+> `app-firebase.js` (init + IIFEs) → `app-scoring.js` → `app-init.js` (startup
+> calls, wiring, live-scores, SW). Reordering will break startup. The CSS files
+> must also stay in order so the cascade is unchanged.
+
+| File | ~Lines | What it holds |
 |------|-------|---------------|
-| [index.html](index.html) | 159 | Page shell, header, tab bar, view `<section>`s, mobile sidebar, script tags |
-| [app.js](app.js) | ~5530 | **Everything** — state, rendering, scoring, auth, Firebase sync, live overlay glue |
-| [fixtures.js](fixtures.js) | 252 | Match list, groups, team→flag map, stage labels |
-| [live-scores.js](live-scores.js) | 615 | Unofficial FIFA API client (scores, scorers, squads, standings) |
-| [third-place-matrix.js](third-place-matrix.js) | 534 | FIFA's best-third-place qualification lookup table |
-| [styles.css](styles.css) | ~4145 | All styling, grouped by feature |
-| [sw.js](sw.js) | 124 | Service worker — offline cache + update toast |
+| [index.html](index.html) | 175 | Page shell, header, tab bar, view `<section>`s, mobile nav, link/script tags |
+| **App code (split from `app.js`, in `js/` — load in this order)** | | |
+| [js/app-core.js](js/app-core.js) | 609 | `els`, constants, `state` + load/save, modal helpers, results, timezones, flags, countdown helpers |
+| [js/app-cards.js](js/app-cards.js) | 474 | `renderMatchCard`, scorers get/set, `renderScorersBlock`, `resultLabel`, `wireScoreInputs`, day-group helpers |
+| [js/app-schedule.js](js/app-schedule.js) | 896 | **Schedule** view, KO assignment + bracket resolve, `computeStandings`, **clinch** (`groupClinch`), `buildStandingsTable`, thirds panel |
+| [js/app-standings.js](js/app-standings.js) | 365 | `renderStandings` (+ FLIP/count animation), **Bracket** render, `computeTopScorers` |
+| [js/app-picks.js](js/app-picks.js) | 812 | **Match Predict** (`renderPicks`/`renderPickCard`), rules modal, user-predictions modal, leaderboard table |
+| [js/app-drawer.js](js/app-drawer.js) | 401 | **Top-5 drawer** (+ count-up audio/badge), `renderLeaderboardView`, `renderTopScorers`, golden boot |
+| [js/app-predict.js](js/app-predict.js) | 908 | Lock helpers, **Table Predict** (group order, thirds, bracket, share link), `renderPredict`, `switchView`, `render`, filter wiring |
+| [js/app-auth.js](js/app-auth.js) | 261 | **Auth UI** (sign in/out, settings, change password) + user/settings button wiring |
+| [js/app-firebase.js](js/app-firebase.js) | 425 | **Firebase** config + `appwriteSync`/`appwriteAuth`/`userPicksSync` IIFEs, picks encode/decode |
+| [js/app-scoring.js](js/app-scoring.js) | 170 | Scoring engine (`scoreMatchPick`, `computeLeaderboard`), cache versioning |
+| [js/app-init.js](js/app-init.js) | 686 | **Startup/init**, countdown ticker, live-scores glue, match-stats + team modal, SW registration |
+| **Other JS (in `js/`)** | | |
+| [js/fixtures.js](js/fixtures.js) | 252 | Match list, groups, team→flag map, stage labels |
+| [js/live-scores.js](js/live-scores.js) | 615 | Unofficial FIFA API client (scores, scorers, squads, standings) |
+| [js/third-place-matrix.js](js/third-place-matrix.js) | 534 | FIFA's best-third-place qualification lookup table |
+| **Styles (split from `styles.css`, loaded in this order)** | | |
+| [css/base.css](css/base.css) | 590 | Root vars, reset, hero, layout, controls, login modal |
+| [css/schedule.css](css/schedule.css) | 971 | Summary, schedule view, countdown/cards, team + lightbox modals |
+| [css/standings.css](css/standings.css) | 671 | Result row, scorers, standings, clinch badges, thirds panel |
+| [css/bracket-groups.css](css/bracket-groups.css) | 562 | Bracket, groups, footer, mobile bottom nav, responsive |
+| [css/leaderboard.css](css/leaderboard.css) | 911 | Top scorers, prediction mode, picks, Top-5 drawer, scoreboard, leaderboard table |
+| [css/modals.css](css/modals.css) | 809 | Rules modal, predict-step styles, admin view-predictions |
+| **PWA** | | |
+| [sw.js](sw.js) | 138 | Service worker — offline cache (`APP_SHELL` lists all the above) + update toast |
 | [manifest.webmanifest](manifest.webmanifest) | 27 | PWA metadata (name, icons, `portrait` orientation) |
+
+> The deep-link line numbers in the sections below were written against the old
+> single `app.js`; they're now **offsets within whichever split file** contains
+> that function. Search by function name (stable) to find it.
 
 ---
 

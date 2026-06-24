@@ -1,0 +1,562 @@
+/* ---------- Bracket ---------- */
+.bracket-view {
+  margin-top: 20px;
+}
+
+.bracket-layout-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.bracket-layout-label {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.bracket-layout-btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bracket-layout-btn:hover {
+  background: var(--surface3);
+  color: var(--text);
+}
+
+.bracket-layout-btn.active {
+  background: rgba(76, 201, 240, 0.15);
+  border-color: rgba(76, 201, 240, 0.5);
+  color: var(--accent-2);
+}
+
+.bracket-scroll {
+  overflow-x: auto;
+  padding-bottom: 10px;
+}
+
+.bracket {
+  display: flex;
+  gap: 18px;
+  min-width: 1100px;
+  align-items: stretch;
+}
+
+.bracket-two-sided {
+  display: flex;
+  align-items: stretch;
+  min-width: 1600px;
+  gap: 4px;
+}
+
+.bracket-half {
+  display: flex;
+  flex: 1;
+  gap: 4px;
+  align-items: stretch;
+}
+
+.bracket-center {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 0 6px;
+}
+
+.bracket-center .bracket-matches {
+  flex: 1;
+  justify-content: center;
+  min-height: unset;
+}
+
+.bracket-right .bracket-team,
+.bracket-right .predict-bracket-team {
+  flex-direction: row-reverse;
+}
+
+.bracket-right .bracket-team-name {
+  text-align: right;
+}
+
+.bracket-round {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.bracket-two-sided .bracket-round {
+  min-width: 165px;
+}
+
+.bracket-round-title {
+  text-align: center;
+  margin: 0 0 14px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--accent-2);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.bracket-matches {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-around;
+  gap: 8px;
+  min-height: 720px;
+}
+
+.bracket-two-sided .bracket-matches {
+  gap: 6px;
+  min-height: 800px;
+}
+
+.bracket-match {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.bracket-match:hover {
+  border-color: var(--accent-2);
+}
+
+.bracket-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.bracket-team+.bracket-team {
+  border-top: 1px solid rgba(40, 49, 90, 0.5);
+}
+
+.bracket-team .flag {
+  width: 22px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.bracket .flag-img {
+  width: 22px;
+  height: 15px;
+}
+
+.bracket-team-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.bracket-team.placeholder .bracket-team-name {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-style: italic;
+  font-size: 11px;
+}
+
+.bracket-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  text-align: right;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.bracket-team.win {
+  color: var(--gold);
+}
+
+.bracket-team.win .bracket-score {
+  color: var(--gold);
+}
+
+.bracket-team.lose {
+  opacity: 0.55;
+}
+
+.bracket-third {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.bracket-third .bracket-round-title {
+  background: rgba(46, 204, 113, 0.12);
+  border-color: rgba(46, 204, 113, 0.35);
+  color: var(--green);
+  margin: 0;
+}
+
+.bracket-third .bracket-match {
+  min-width: 280px;
+}
+
+@media (max-width: 700px) {
+  .bracket-round-title {
+    font-size: 11px;
+  }
+
+  .bracket-matches {
+    min-height: 600px;
+  }
+}
+
+/* ---------- Groups View ---------- */
+.groups-view {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.groups-view[hidden],
+.schedule-view[hidden],
+.standings-view[hidden],
+.bracket-view[hidden],
+.scorers-leaderboard-view[hidden],
+.predict-view[hidden],
+.picks-view[hidden],
+.leaderboard-view[hidden] {
+  display: none;
+}
+
+.leaderboard-view {
+  padding-top: 16px;
+}
+
+.group-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 18px 14px;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.group-card:hover {
+  border-color: var(--accent-2);
+  transform: translateY(-2px);
+}
+
+.group-card h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  color: var(--accent-2);
+}
+
+.group-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.group-card li {
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(40, 49, 90, 0.5);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color 0.15s, padding 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.group-card li:last-child {
+  border-bottom: none;
+}
+
+.group-card li:hover {
+  color: var(--accent-2);
+  padding-left: 4px;
+}
+
+/* ---------- Empty state ---------- */
+.empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-dim);
+}
+
+/* ---------- Footer ---------- */
+footer {
+  border-top: 1px solid var(--border);
+  padding: 20px 24px;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ---------- Mobile sidebar navigation ---------- */
+.hero-menu-btn {
+  display: none;
+}
+
+.sidebar-overlay {
+  display: none;
+}
+
+.mobile-sidebar {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* Hamburger + overlay not used — navigation is a fixed bottom bar */
+  .hero-menu-btn {
+    display: none;
+  }
+
+  .sidebar-overlay {
+    display: none;
+  }
+
+  /* Navigation as a fixed horizontal bottom bar — all tabs fit, no scrolling */
+  .mobile-sidebar {
+    display: flex;
+    flex-direction: row;
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    z-index: 300;
+    background: var(--bg-elev);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+    padding-bottom: env(safe-area-inset-bottom);
+    transform: none;
+    overflow: hidden;
+    overscroll-behavior: contain;
+  }
+
+  /* Header (title + close) belongs to the old drawer — hidden in the bottom bar */
+  .sidebar-header {
+    display: none;
+  }
+
+  .sidebar-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  .sidebar-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-dim);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .sidebar-close-btn:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--text);
+  }
+
+  /* Nav items — single horizontal row across the bottom (swipe for overflow) */
+  .sidebar-nav-items {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0;
+    padding: 0;
+    width: 100%;
+  }
+
+  .mobile-sidebar .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 4px;
+    flex: 1 1 0;
+    min-width: 0;          /* equal columns that all fit across the screen */
+    padding: 7px 2px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: var(--text-dim);
+    font-size: 9px;
+    font-weight: 500;
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;    /* let two-word labels wrap to a second line */
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .mobile-sidebar .tab svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .mobile-sidebar .tab:hover {
+    color: var(--text);
+  }
+
+  .mobile-sidebar .tab.active {
+    color: var(--accent-2);
+    background: rgba(76, 201, 240, 0.1);
+    box-shadow: inset 0 2px 0 var(--accent-2);
+  }
+
+  .mobile-sidebar .tab.active svg {
+    stroke: var(--accent-2);
+  }
+
+  .mobile-sidebar .tab svg {
+    flex-shrink: 0;
+    opacity: 0.75;
+  }
+
+  .mobile-sidebar .tab.active svg {
+    opacity: 1;
+  }
+
+  /* Leave room for the fixed bottom nav bar */
+  .container {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+
+  footer {
+    margin-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 600px) {
+
+  /* Tighter hero on small phones — no hamburger now, normal left padding */
+  .hero {
+    padding: 40px 18px 32px;
+  }
+
+  .container {
+    padding: 20px 14px calc(70px + env(safe-area-inset-bottom));
+  }
+
+  /* Sticky filter bar → static column on mobile */
+  .controls {
+    position: static;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  /* All three selects full-width */
+  #teamSelect,
+  #dateSelect,
+  #tzSelect {
+    min-width: 0;
+    width: 100%;
+  }
+
+  #clearBtn {
+    width: 100%;
+  }
+
+  /* Hide top tab bar — bottom nav takes over on mobile */
+  .view-toggle {
+    display: none;
+  }
+
+  /* Push content above the fixed bottom nav */
+  .container {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+
+  footer {
+    margin-bottom: calc(64px + env(safe-area-inset-bottom));
+  }
+
+  /* Single-column match grid */
+  .match-list {
+    grid-template-columns: 1fr;
+  }
+
+  /* Standings table — let user scroll horizontally if columns don't fit */
+  .standings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .standings-table {
+    padding: 14px;
+    overflow-x: auto;
+  }
+
+  .standings-table table {
+    min-width: 320px;
+  }
+
+  /* Result row: wrap PK block to its own line if needed */
+  .result-row {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  /* Schedule day matches: avoid horizontal scrolling */
+  .day-header .day-date {
+    font-size: 16px;
+  }
+
+  /* Smaller summary text */
+  .summary {
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+
+  /* Leaderboard — let table scroll horizontally on very small screens */
+  .ts-table-wrap {
+    overflow-x: auto;
+  }
+
+  .ts-table {
+    min-width: 460px;
+    font-size: 13px;
+  }
+}
+

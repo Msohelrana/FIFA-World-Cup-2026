@@ -1,0 +1,911 @@
+/* ---------- Top Scorers (Leaderboard) ---------- */
+.scorers-leaderboard-view {
+  margin-top: 20px;
+}
+
+.ts-intro {
+  margin-bottom: 16px;
+  padding: 14px 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.ts-intro p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.ts-intro p+p {
+  margin-top: 6px;
+}
+
+.ts-summary strong {
+  color: var(--accent-2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Golden Boot — current leader banner */
+.golden-boot-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, rgba(255, 209, 102, 0.16), rgba(244, 162, 97, 0.08));
+  border: 1px solid rgba(255, 209, 102, 0.55);
+}
+
+.gb-trophy {
+  font-size: 40px;
+  line-height: 1;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+}
+
+.gb-body { min-width: 0; }
+
+.gb-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #ffd166;
+  margin-bottom: 4px;
+}
+
+.gb-leaders {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.gb-leader {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gb-name {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.gb-team { font-size: 13px; color: var(--text-dim); }
+.gb-amp { color: var(--text-dim); margin: 0 2px; }
+
+.gb-goals {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.gb-goals strong { color: #ffd166; font-size: 15px; }
+
+.gb-note {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  opacity: 0.85;
+}
+
+.ts-table-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+}
+
+.ts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.ts-table th,
+.ts-table td {
+  padding: 9px 8px;
+  border-bottom: 1px solid rgba(40, 49, 90, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.ts-table th {
+  text-align: left;
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ts-table tr:last-child td {
+  border-bottom: none;
+}
+
+.ts-table .ts-rank {
+  width: 40px;
+  text-align: center;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.ts-table .ts-player {
+  font-weight: 600;
+}
+
+.ts-table .ts-name {
+  color: var(--text);
+}
+
+.ts-table .ts-team {
+  white-space: nowrap;
+}
+
+.ts-table .ts-team .flag {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+
+.ts-table .ts-team-name {
+  vertical-align: middle;
+}
+
+.ts-table .ts-goals,
+.ts-table .ts-matches {
+  text-align: center;
+  width: 70px;
+}
+
+.ts-table .ts-goals {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 15px;
+}
+
+/* Medal accents for top 3 */
+.ts-table tr.ts-rank-1 td {
+  background: rgba(255, 209, 102, 0.10);
+}
+
+.ts-table tr.ts-rank-1 .ts-rank {
+  color: var(--gold);
+}
+
+.ts-table tr.ts-rank-1 .ts-rank::before {
+  content: "🥇 ";
+}
+
+.ts-table tr.ts-rank-2 .ts-rank {
+  color: #c8d0dc;
+}
+
+.ts-table tr.ts-rank-2 .ts-rank::before {
+  content: "🥈 ";
+}
+
+.ts-table tr.ts-rank-3 .ts-rank {
+  color: #d99765;
+}
+
+.ts-table tr.ts-rank-3 .ts-rank::before {
+  content: "🥉 ";
+}
+
+.ts-table tr.ts-rank-1 td:first-child {
+  border-left: 3px solid var(--gold);
+}
+
+/* ---------- Prediction Mode ---------- */
+.predict-view {
+  margin-top: 20px;
+}
+
+.predict-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.10), rgba(255, 77, 109, 0.10));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.predict-header p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+  flex: 1;
+  min-width: 240px;
+}
+
+/* View-only banner shown when opening a shared prediction link */
+.predict-shared-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.18), rgba(255, 209, 102, 0.12));
+  border: 1px solid rgba(76, 201, 240, 0.45);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.predict-shared-text {
+  flex: 1;
+  min-width: 240px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.predict-shared-text strong {
+  color: var(--accent-2);
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.predict-shared-text em {
+  color: var(--gold);
+  font-style: normal;
+  font-weight: 600;
+}
+
+.predict-shared-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ---------- Picks view (per-match score predictor) ---------- */
+.picks-view {
+  margin-top: 20px;
+}
+
+.picks-view .day-group {
+  margin-bottom: 28px;
+}
+
+/* Per-card lock / pending badge inside the score row */
+.pick-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  background: rgba(154, 163, 199, 0.12);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.pick-lock-badge.pending {
+  color: var(--accent-2);
+  background: rgba(76, 201, 240, 0.10);
+  border-color: rgba(76, 201, 240, 0.3);
+}
+
+.pick-card.is-ended .pick-lock-badge {
+  color: #ff6b7a;
+  background: rgba(255, 77, 109, 0.15);
+  border-color: rgba(255, 77, 109, 0.45);
+}
+
+.pick-card .pb-pred .score-input:disabled {
+  cursor: not-allowed;
+  background: rgba(11, 16, 32, 0.4);
+  color: var(--text-dim);
+}
+
+/* Once a match is locked (kicked off — live or finished), the prediction section
+   turns red */
+.pick-card.is-locked .pb-pred-section {
+  background: rgba(255, 50, 70, 0.07);
+  border-color: rgba(255, 77, 109, 0.3);
+}
+
+.pick-card.is-locked .pb-pred .score-input:disabled {
+  background: rgba(255, 50, 70, 0.1);
+  color: #ff8090;
+  border-color: rgba(255, 77, 109, 0.35);
+}
+
+/* Result label color cues — gold for a clear winner, cyan for a draw */
+.pick-card .result-label.is-draw {
+  color: var(--accent-2);
+}
+
+/* ---------- Top-5 live drawer ---------- */
+/* No backdrop — the page stays interactive while the drawer is open. */
+.top5-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(330px, 86vw);
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  box-shadow: -10px 0 34px rgba(0, 0, 0, 0.45);
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  z-index: 1401;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+}
+.top5-drawer.open {
+  transform: translateX(0);
+}
+.top5-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.top5-drawer-title {
+  font-size: 16px;
+  font-weight: 800;
+}
+.top5-drawer-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.top5-drawer-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.top5-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.top5-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+}
+/* Floating ▲/▼ delta that rises above the points when a score changes */
+.pts-delta {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 2;
+  animation: top5DeltaFloat 1.5s ease-out forwards;
+}
+.pts-delta.up { color: #54e08a; }
+.pts-delta.down { color: #ff6d82; }
+@keyframes top5DeltaFloat {
+  0%   { opacity: 0; transform: translateY(-50%); }
+  20%  { opacity: 1; transform: translateY(-130%); }
+  100% { opacity: 0; transform: translateY(-280%); }
+}
+/* Distinct background per rank — gold, silver, bronze, then two accents */
+.top5-list .top5-row:nth-child(1) { background: rgba(255, 209, 102, 0.16); border-color: rgba(255, 209, 102, 0.5); }
+.top5-list .top5-row:nth-child(2) { background: rgba(199, 210, 230, 0.14); border-color: rgba(199, 210, 230, 0.45); }
+.top5-list .top5-row:nth-child(3) { background: rgba(205, 127, 50, 0.18); border-color: rgba(205, 127, 50, 0.5); }
+.top5-list .top5-row:nth-child(4) { background: rgba(76, 201, 240, 0.13); border-color: rgba(76, 201, 240, 0.4); }
+.top5-list .top5-row:nth-child(5) { background: rgba(155, 110, 240, 0.15); border-color: rgba(155, 110, 240, 0.45); }
+/* "You" gets an inset ring so it stands out without overriding its rank colour */
+.top5-row.is-me {
+  box-shadow: inset 0 0 0 2px var(--accent-2);
+}
+.top5-rank {
+  width: 26px;
+  flex-shrink: 0;
+  text-align: center;
+  font-size: 16px;
+}
+.top5-rank-num {
+  font-weight: 800;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+.top5-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.top5-pts {
+  flex-shrink: 0;
+  font-weight: 800;
+  color: var(--gold);
+  display: inline-block;
+  transform-origin: center;
+}
+/* Leaderboard total value (inner span so the pop transform works inside a td) */
+.lb-total { position: relative; }
+.lb-total-val {
+  display: inline-block;
+  transform-origin: center;
+}
+/* Brief "pop" + brighten while a score counts up to its new value (both views) */
+.pts-bump {
+  display: inline-block;
+  transform-origin: center;
+  animation: top5PtsBump 1.5s ease-out;
+}
+@keyframes top5PtsBump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.4); color: #fff; text-shadow: 0 0 10px rgba(255, 209, 102, 0.8); }
+  100% { transform: scale(1); }
+}
+.top5-empty {
+  color: var(--text-dim);
+  text-align: center;
+  padding: 24px 0;
+  font-size: 13px;
+}
+.top5-viewfull {
+  margin-top: auto;
+  padding: 11px;
+  background: rgba(76, 201, 240, 0.1);
+  border: 1px solid rgba(76, 201, 240, 0.3);
+  border-radius: 10px;
+  color: var(--accent-2);
+  font-weight: 700;
+  cursor: pointer;
+}
+.top5-viewfull:hover {
+  background: rgba(76, 201, 240, 0.16);
+}
+
+/* Mobile: keep the drawer narrow AND short (content height, not full height)
+   so the page behind stays visible. */
+@media (max-width: 600px) {
+  .top5-drawer {
+    width: min(230px, 68vw);
+    bottom: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-bottom: 1px solid var(--border);
+    border-bottom-left-radius: 14px;
+    padding: 12px 10px;
+  }
+  .top5-drawer-title {
+    font-size: 14px;
+  }
+  .top5-row {
+    padding: 7px 9px;
+    gap: 7px;
+    font-size: 12px;
+  }
+  .top5-name {
+    font-size: 12px;
+  }
+  .top5-pts {
+    font-size: 13px;
+  }
+  .top5-rank {
+    width: 20px;
+    font-size: 13px;
+  }
+  .top5-viewfull {
+    margin-top: 12px;
+    padding: 9px;
+    font-size: 13px;
+  }
+}
+
+/* Scoreboard sections under the team names — the prediction inputs and the
+   actual result, each score sitting directly beneath its team (left under team1,
+   right under team2) with the centre holding the lock/tag and the label below.
+   Each section keeps its own boxed background (pick = dark, actual = cyan). */
+.pb-section {
+  margin: 8px 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.pb-pred-section,
+.pb-result-section {
+  background: rgba(11, 16, 32, 0.55);
+}
+.pb-actual-section {
+  background: rgba(76, 201, 240, 0.08);
+  border-color: rgba(76, 201, 240, 0.35);
+}
+.pb-actual-section.is-live-result {
+  background: rgba(255, 77, 109, 0.1);
+  border-color: rgba(255, 77, 109, 0.35);
+}
+/* Scores grouped together in the centre, with the centre element (colon, lock
+   badge / "Your pick" tag, or "Result" tag) sitting between the two scores. */
+.pb-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.pb-pk-row {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+/* In the centred PK row, drop the inline divider/offsets so the pen scores line
+   up directly under the main scores, and float the "PK" label out of the centre. */
+.pb-pk-row .pen-block {
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border-left: 0;
+}
+.pb-pk-row .pen-input {
+  width: 44px;
+  font-size: 15px;
+  padding: 6px 4px;
+}
+.pk-tag {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+}
+.pb-center {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 2px;
+}
+.pb-tag {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+.pb-label-row {
+  text-align: center;
+  margin: 6px 0 0;
+}
+.actual-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-2);
+}
+.pb-actual-section.is-live-result .actual-tag {
+  color: #ff8095;
+}
+/* Read-only score "box" — same shape as the prediction input; background matches
+   the result section, with a cyan border (red while live) for the box shape. */
+.score-box {
+  width: 44px;
+  text-align: center;
+  padding: 6px 4px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background: rgba(76, 201, 240, 0.08);
+  border: 1px solid rgba(76, 201, 240, 0.55);
+}
+.pb-actual-section.is-live-result .score-box {
+  border-color: rgba(255, 77, 109, 0.6);
+}
+.pick-actual-pens {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.pick-verdict {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.pick-verdict.v-exact { color: #0b1020; background: var(--gold); }
+.pick-verdict.v-partial { color: #b7f7c8; background: rgba(60, 200, 110, 0.16); }
+.pick-verdict.v-miss { color: #ffc2cc; background: rgba(255, 77, 109, 0.16); }
+.pick-verdict.v-none { color: var(--text-dim); background: rgba(255, 255, 255, 0.06); }
+.pick-verdict.v-live { color: #ffd7df; background: rgba(255, 77, 109, 0.18); }
+
+/* Penalty winner picker (appears under score row when KO + tied) */
+.pk-picker-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: rgba(255, 209, 102, 0.08);
+  border: 1px dashed rgba(255, 209, 102, 0.35);
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.pk-label {
+  font-weight: 700;
+  color: var(--gold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.pk-btn {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pk-btn:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.pk-btn.is-picked {
+  background: rgba(255, 209, 102, 0.18);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* Sign-in banner above the picks list */
+.picks-signin-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(135deg, rgba(76, 201, 240, 0.18), rgba(255, 77, 109, 0.12));
+  border: 1px solid rgba(76, 201, 240, 0.4);
+  border-radius: var(--radius);
+  color: var(--text);
+}
+
+.picks-signin-text {
+  flex: 1;
+  min-width: 240px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.picks-signin-text strong {
+  color: var(--accent-2);
+}
+
+.picks-signin-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Leaderboard table */
+.picks-leaderboard-section {
+  margin-bottom: 20px;
+  padding: 16px 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.picks-lb-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  letter-spacing: 0.01em;
+  color: var(--accent-2);
+}
+
+.picks-lb-empty {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.picks-lb-table-wrap {
+  overflow-x: auto;
+}
+
+.picks-lb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 480px;
+}
+
+.picks-lb-table th,
+.picks-lb-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(40, 49, 90, 0.5);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.picks-lb-table th {
+  color: var(--text-dim);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.picks-lb-table tr:last-child td {
+  border-bottom: none;
+}
+
+.picks-lb-table .lb-name {
+  text-align: left;
+  font-weight: 600;
+}
+
+.picks-lb-table .lb-rank {
+  width: 60px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.picks-lb-table .lb-total {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 14px;
+  width: 60px;
+}
+
+.picks-lb-table .lb-exact,
+.picks-lb-table .lb-outcome,
+.picks-lb-table .lb-pk,
+.picks-lb-table .lb-gd {
+  width: 70px;
+  color: var(--text-dim);
+}
+
+.picks-lb-table .lb-acc {
+  width: 56px;
+  color: var(--accent-2);
+  font-size: 12px;
+}
+
+.picks-lb-table tr.lb-rank-1 td {
+  background: rgba(255, 209, 102, 0.07);
+}
+
+.picks-lb-table tr.lb-rank-1 td:first-child {
+  border-left: 3px solid var(--gold);
+}
+
+.picks-lb-table tr.lb-rank-1 .lb-rank {
+  color: var(--gold);
+}
+
+.picks-lb-table tr.lb-rank-2 td {
+  background: rgba(192, 200, 212, 0.06);
+}
+
+.picks-lb-table tr.lb-rank-2 td:first-child {
+  border-left: 3px solid #c0c8d4;
+}
+
+.picks-lb-table tr.lb-rank-2 .lb-rank {
+  color: #c0c8d4;
+}
+
+.picks-lb-table tr.lb-rank-3 td {
+  background: rgba(196, 136, 92, 0.07);
+}
+
+.picks-lb-table tr.lb-rank-3 td:first-child {
+  border-left: 3px solid #c4885c;
+}
+
+.picks-lb-table tr.lb-rank-3 .lb-rank {
+  color: #c4885c;
+}
+
+.picks-lb-table tr.is-me td {
+  background: rgba(76, 201, 240, 0.12);
+}
+
+.lb-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: hsl(var(--av-hue, 200), 50%, 32%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  margin-right: 7px;
+  vertical-align: middle;
+}
+
+.picks-lb-table tr {
+  will-change: transform;
+}
+
+.lb-arrow {
+  font-size: 9px;
+  margin-left: 4px;
+  font-weight: 700;
+}
+
+.lb-arrow-up {
+  color: #2ecc71;
+}
+
+.lb-arrow-down {
+  color: #e74c3c;
+}
+
+.lb-you {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(76, 201, 240, 0.18);
+  color: var(--accent-2);
+  border-radius: 999px;
+}
+
+/* "Active" highlight for the leaderboard toggle when expanded */
+.predict-header-actions .action-btn.is-active {
+  background: rgba(255, 209, 102, 0.15);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+

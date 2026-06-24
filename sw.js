@@ -6,7 +6,7 @@
 //   - Appwrite realtime (WebSocket): not intercepted; the browser handles it natively
 //   - Anything else same-origin: stale-while-revalidate
 
-const CACHE_VERSION = "1781800015";
+const CACHE_VERSION = "1781800018";
 const APP_CACHE = `wc2026-app-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `wc2026-runtime-${CACHE_VERSION}`;
 
@@ -14,11 +14,28 @@ const RUNTIME_CACHE = `wc2026-runtime-${CACHE_VERSION}`;
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css",
-  "./app.js",
-  "./fixtures.js",
-  "./third-place-matrix.js",
-  "./live-scores.js",
+  // Styles (split from the old styles.css for maintainability)
+  "./css/base.css",
+  "./css/schedule.css",
+  "./css/standings.css",
+  "./css/bracket-groups.css",
+  "./css/leaderboard.css",
+  "./css/modals.css",
+  "./js/fixtures.js",
+  "./js/third-place-matrix.js",
+  "./js/live-scores.js",
+  // App code (split from the old app.js — load order matters; see index.html)
+  "./js/app-core.js",
+  "./js/app-cards.js",
+  "./js/app-schedule.js",
+  "./js/app-standings.js",
+  "./js/app-picks.js",
+  "./js/app-drawer.js",
+  "./js/app-predict.js",
+  "./js/app-auth.js",
+  "./js/app-firebase.js",
+  "./js/app-scoring.js",
+  "./js/app-init.js",
   "./manifest.webmanifest",
   "./icon.png",
   "./icon.svg",

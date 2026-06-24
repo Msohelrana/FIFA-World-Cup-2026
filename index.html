@@ -5,7 +5,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FIFA World Cup 2026 — Fixtures</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/schedule.css" />
+  <link rel="stylesheet" href="css/standings.css" />
+  <link rel="stylesheet" href="css/bracket-groups.css" />
+  <link rel="stylesheet" href="css/leaderboard.css" />
+  <link rel="stylesheet" href="css/modals.css" />
 
   <!-- PWA: installable + theme colors -->
   <link rel="manifest" href="manifest.webmanifest" />
@@ -152,10 +157,22 @@
   <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore-compat.js"></script>
-  <script src="fixtures.js"></script>
-  <script src="third-place-matrix.js"></script>
-  <script src="live-scores.js"></script>
-  <script src="app.js"></script>
+  <script src="js/fixtures.js"></script>
+  <script src="js/third-place-matrix.js"></script>
+  <script src="js/live-scores.js"></script>
+  <!-- app.js was split for maintainability; these MUST load in this order
+       (definitions first, then auth → firebase/IIFEs → scoring → init/startup). -->
+  <script src="js/app-core.js"></script>
+  <script src="js/app-cards.js"></script>
+  <script src="js/app-schedule.js"></script>
+  <script src="js/app-standings.js"></script>
+  <script src="js/app-picks.js"></script>
+  <script src="js/app-drawer.js"></script>
+  <script src="js/app-predict.js"></script>
+  <script src="js/app-auth.js"></script>
+  <script src="js/app-firebase.js"></script>
+  <script src="js/app-scoring.js"></script>
+  <script src="js/app-init.js"></script>
 </body>
 
 </html>
