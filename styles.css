@@ -2058,6 +2058,11 @@ html:has(body.modal-open) {
 .standings-table .pts {
   color: var(--gold);
   font-weight: 700;
+  position: relative;   /* anchor for the floating ▲/▼ delta badge */
+}
+.st-pts-val {
+  display: inline-block;
+  transform-origin: center;
 }
 
 .standings-table tr.qualify td {

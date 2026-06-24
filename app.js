@@ -1802,7 +1802,7 @@ function buildStandingsTable(letter, thirdQualifyingGroups) {
           : "";
     const rowCls = cls + (clinch[r.team] === "out" ? " eliminated-row" : "");
     return `
-          <tr class="${rowCls}">
+          <tr class="${rowCls}" data-team="${escapeHTML(r.team)}">
             <td class="pos">${i + 1}${moveBtns}</td>
             <td class="team-col"><span class="flag">${flagFor(r.team)}</span>${r.team}${clinchBadge}</td>
             <td>${r.played}</td>
@@ -1812,7 +1812,7 @@ function buildStandingsTable(letter, thirdQualifyingGroups) {
             <td>${r.gf}</td>
             <td>${r.ga}</td>
             <td>${r.gd > 0 ? "+" + r.gd : r.gd}</td>
-            <td class="pts">${r.points}</td>
+            <td class="pts"><span class="st-pts-val">${r.points}</span></td>
           </tr>`;
   }).join("")}
       </tbody>
@@ -1828,11 +1828,13 @@ function patchStandingsTables(changedGroups) {
   if (!grid) { renderStandings(); return; }
   const ko = buildCurrentBracketKo();
   const thirdQualifyingGroups = new Set(ko.top8.map(t => t.group));
+  const flipFirst = captureStandingsPositions(grid);
   for (const letter of changedGroups) {
     const existing = grid.querySelector(`.standings-table[data-group="${letter}"]`);
     if (!existing) continue;
     existing.replaceWith(buildStandingsTable(letter, thirdQualifyingGroups));
   }
+  applyStandingsFlipCount(grid, flipFirst);
   const existingPanel = els.standingsView.querySelector(".thirds-panel");
   if (existingPanel) existingPanel.replaceWith(renderThirdPlacePanel(ko.allThirds));
 }
@@ -1936,7 +1938,47 @@ function moveThirdsRow(fromIndex, dir) {
   renderStandings();
 }
 
+// Live-standings animation (same feel as the leaderboard): rows slide to new
+// positions and the Pts value counts up/down with a pop + ▲/▼ badge + sound.
+const _stTotals = new Map();   // team -> last shown points
+function captureStandingsPositions(container) {
+  const pos = new Map();
+  if (!container || container.offsetParent === null) return pos;   // hidden → no animation
+  container.querySelectorAll("tr[data-team]").forEach(tr => pos.set(tr.dataset.team, tr.getBoundingClientRect().top));
+  return pos;
+}
+function applyStandingsFlipCount(container, firstPos) {
+  let anyChange = false, anyUp = false;
+  container.querySelectorAll("tr[data-team]").forEach(tr => {
+    const team = tr.dataset.team;
+    const ptsEl = tr.querySelector(".st-pts-val");
+    if (ptsEl) {
+      const np = Number(ptsEl.textContent);
+      const pp = _stTotals.get(team);
+      if (pp !== undefined && pp !== np) {
+        animateCount(ptsEl, pp, np, tr.querySelector(".pts"));
+        anyChange = true;
+        if (np > pp) anyUp = true;
+      }
+      _stTotals.set(team, np);
+    }
+    const first = firstPos.get(team);
+    if (first === undefined) return;
+    const delta = first - tr.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1) return;
+    tr.style.transition = "none";
+    tr.style.transform = `translateY(${delta}px)`;
+    requestAnimationFrame(() => {
+      tr.style.transition = "transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+      tr.style.transform = "";
+      tr.addEventListener("transitionend", () => { tr.style.transition = ""; tr.style.transform = ""; }, { once: true });
+    });
+  });
+  if (anyChange) playPointChangeSound(anyUp);
+}
+
 function renderStandings() {
+  const flipFirst = captureStandingsPositions(els.standingsView);
   els.standingsView.innerHTML = "";
 
   const intro = document.createElement("div");
@@ -2068,6 +2110,7 @@ function renderStandings() {
 
   els.standingsView.appendChild(grid);
   els.standingsView.appendChild(renderThirdPlacePanel(ko.allThirds));
+  applyStandingsFlipCount(els.standingsView, flipFirst);
 
   // Admin: wire up row reorder + per-group reset buttons (event delegation).
   if (state.isAdmin) {
