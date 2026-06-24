@@ -11,6 +11,7 @@ if (savedView && VALID_VIEWS.includes(savedView) && savedView !== "schedule") {
   render();
 }
 updateProgressBar();
+updatePicksBadge();   // show the "unpredicted soon" count on the Match Predict tab
 
 // Mobile sidebar navigation
 (function () {
@@ -67,6 +68,7 @@ if (appwriteAuth.available) {
       }
     }
     rerenderActive();
+    updatePicksBadge();   // own picks may have loaded from the server
   }).catch(err => console.warn("Auth bootstrap failed:", err.message || err));
 }
 
@@ -137,7 +139,8 @@ function tickCountdowns() {
   _tickN++;
   if (_tickN % 30 === 0) {
     if (state.view === "predict") renderPredict();
-    if (state.view === "picks") renderPicks();
+    if (state.view === "picks") renderPicks();   // also refreshes the picks badge
+    else updatePicksBadge();                      // keep the tab badge fresh as matches lock
   }
 }
 

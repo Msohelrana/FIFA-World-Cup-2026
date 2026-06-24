@@ -572,6 +572,7 @@ html:has(body.modal-open) {
 }
 
 .tab {
+  position: relative;
   background: transparent;
   color: var(--text-dim);
   border: none;
@@ -586,5 +587,37 @@ html:has(body.modal-open) {
 .tab.active {
   background: var(--accent);
   color: white;
+}
+
+/* "Unpredicted matches lock soon" count bubble on the Match Predict tab */
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: var(--gold);
+  color: #0b1020;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  vertical-align: middle;
+}
+.tab.active .tab-badge {
+  background: #0b1020;
+  color: var(--gold);
+}
+/* On the mobile bottom-nav the tab is an icon+label column → pin the badge to
+   the top-right corner instead of inline. */
+@media (max-width: 640px) {
+  .mobile-sidebar .tab .tab-badge {
+    position: absolute;
+    top: 2px;
+    right: 14px;
+    margin: 0;
+  }
 }
 

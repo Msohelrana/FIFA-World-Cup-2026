@@ -192,6 +192,43 @@ function renderPicks() {
 
     view.appendChild(sec);
   }
+
+  updatePicksBadge(ko);
+}
+
+// Count still-predictable matches the user hasn't picked that lock within 24h.
+function countUnpredictedSoon(ko) {
+  if (typeof FIXTURES === "undefined") return 0;
+  ko = ko || getKnockoutAssignments();
+  const now = Date.now();
+  const WINDOW = 24 * 60 * 60 * 1000;
+  let n = 0;
+  for (const m of FIXTURES) {
+    const koMs = fixtureToUTC(m).getTime();
+    if (koMs <= now || koMs - now > WINDOW) continue;       // already locked, or not soon
+    const { team1, team2 } = resolveMatchTeams(m, ko);
+    if (!team1 || !team2) continue;                          // teams undecided → can't predict
+    const p = state.matchPicks[matchId(m)];
+    if (p && p.score1 !== undefined && p.score2 !== undefined) continue;
+    n++;
+  }
+  return n;
+}
+
+// Show/refresh the count bubble on the Match Predict tab(s).
+function updatePicksBadge(ko) {
+  const n = countUnpredictedSoon(ko);
+  document.querySelectorAll('.tab[data-view="picks"]').forEach(btn => {
+    let badge = btn.querySelector(".tab-badge");
+    if (n > 0) {
+      if (!badge) { badge = document.createElement("span"); badge.className = "tab-badge"; btn.appendChild(badge); }
+      badge.textContent = String(n);
+      badge.setAttribute("aria-label", `${n} match${n === 1 ? "" : "es"} lock within 24h, not predicted`);
+      badge.title = badge.getAttribute("aria-label");
+    } else if (badge) {
+      badge.remove();
+    }
+  });
 }
 
 function renderPickCard(m, ko) {
@@ -237,6 +274,14 @@ function renderPickCard(m, ko) {
   const pick = getMatchPick(m) || {};
   const s1 = pick.score1 ?? "";
   const s2 = pick.score2 ?? "";
+
+  // Nudge: flag a still-predictable match the user hasn't picked yet, with
+  // extra emphasis if it locks within 24h.
+  const hasPick = pick.score1 !== undefined && pick.score2 !== undefined;
+  if (!locked && teamsKnown && !hasPick) {
+    card.classList.add("is-unpredicted");
+    if (kickoffUtcMs - Date.now() <= 24 * 60 * 60 * 1000) card.classList.add("is-locking-soon");
+  }
 
   const disabledAttr = (!teamsKnown || locked) ? "disabled" : "";
   const lockBadge = locked
@@ -374,6 +419,7 @@ function saveMatchPickFull(m, next) {
     state.matchPicks[id] = clean;
   }
   saveMatchPicks();
+  updatePicksBadge();
   if (state.currentUser && userPicksSync.available) userPicksSync.saveOwn();
 }
 

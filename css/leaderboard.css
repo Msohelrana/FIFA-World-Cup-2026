@@ -272,6 +272,16 @@
   margin-top: 20px;
 }
 
+/* Nudge: still-predictable matches the user hasn't picked yet */
+.pick-card.is-unpredicted {
+  border-color: rgba(255, 209, 102, 0.4);
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+.pick-card.is-locking-soon {
+  border-color: rgba(255, 209, 102, 0.75);
+  box-shadow: inset 3px 0 0 var(--gold), 0 0 0 1px rgba(255, 209, 102, 0.3);
+}
+
 .picks-view .day-group {
   margin-bottom: 28px;
 }
