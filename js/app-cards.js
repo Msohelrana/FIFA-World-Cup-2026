@@ -412,7 +412,10 @@ function wireScoreInputs(card, m, t1, t2, teamsKnown) {
 
     const v1 = parseNum(s1);
     const v2 = parseNum(s2);
+    // A hand-typed score becomes the canonical admin entry — drop any
+    // auto-archived flag so the live/API feed no longer overrides it.
     const next = { ...(prev || {}), score1: v1, score2: v2 };
+    delete next.auto;
 
     if (p1 && p2) {
       next.pen1 = parseNum(p1);

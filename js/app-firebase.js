@@ -65,6 +65,7 @@ const appwriteSync = (() => {
     if (data.pen2 !== null && data.pen2 !== undefined) r.pen2 = data.pen2;
     if (Array.isArray(data.scorers) && data.scorers.length) r.scorers = data.scorers;
     if (Array.isArray(data.cards) && data.cards.length) r.cards = data.cards;
+    if (data.auto) r.auto = true;   // auto-archived API value (not hand-entered)
     return sanitizeResult(r);
   }
 
@@ -79,6 +80,7 @@ const appwriteSync = (() => {
       pen2: r.pen2 ?? null,
       scorers: clean((Array.isArray(r.scorers) ? r.scorers : []).filter(s => s && !s.card)),
       cards: clean(Array.isArray(r.cards) ? r.cards : []),
+      auto: r.auto === true,   // true = auto-archived API value; false = hand-entered
       updatedAt: _fbServerTime(),
     };
   }
@@ -383,17 +385,29 @@ const userPicksSync = (() => {
   }
 
   function subscribe() {
-    db.collection(COLL).onSnapshot((snap) => {
+    const rerender = () => {
+      if (state.view === "picks") renderPicks();
+      else if (state.view === "leaderboard") renderLeaderboardView();
+      refreshTop5Drawer();   // keep the Top-5 drawer live (no-op if closed)
+    };
+    // includeMetadataChanges so we also get the cache→server confirmation even
+    // when the doc set is unchanged (warm cache).
+    db.collection(COLL).onSnapshot({ includeMetadataChanges: true }, (snap) => {
       snap.docChanges().forEach((ch) => {
         const data = ch.doc.data();
         const idx = state.leaderboardUsers.findIndex(u => u.userId === data.userId);
         if (ch.type === "removed") { if (idx >= 0) state.leaderboardUsers.splice(idx, 1); }
         else { const row = rowFromDoc(data); if (idx >= 0) state.leaderboardUsers[idx] = row; else state.leaderboardUsers.push(row); }
       });
-      if (state.view === "picks") renderPicks();
-      else if (state.view === "leaderboard") renderLeaderboardView();
-      refreshTop5Drawer();   // keep the Top-5 drawer live (no-op if closed)
-    }, (err) => console.warn("User picks subscribe failed:", err.message || err));
+      // The first snapshot can be served from the local cache holding only the
+      // current user's doc — don't render the partial board as if it were full.
+      // Ready once the server confirms (!fromCache) OR the cache already has
+      // more than just the current user.
+      if (!snap.metadata.fromCache || state.leaderboardUsers.length > 1) state.leaderboardReady = true;
+      rerender();
+    }, (err) => { console.warn("User picks subscribe failed:", err.message || err); state.leaderboardReady = true; rerender(); });
+    // Offline / very slow network: don't spin forever — show whatever we have.
+    setTimeout(() => { if (!state.leaderboardReady) { state.leaderboardReady = true; rerender(); } }, 6000);
   }
 
   // Admin: write another user's picks (e.g. backfilling a finished match's

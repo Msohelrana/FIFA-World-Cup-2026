@@ -69,7 +69,8 @@ const state = {
   matchPicks: loadMatchPicks(),
   currentUser: null,             // {id, name, email} once logged in
   leaderboardUsers: [],          // [{userId, userName, picks, firstSubmittedAt}] for ranking
-  leaderboardLoaded: false,      // true once fetchAll() has been called (lazy)
+  leaderboardLoaded: false,      // true once the realtime subscription has been started (lazy)
+  leaderboardReady: false,       // true once the FULL board has actually arrived (not just self)
   isAdmin: false,                // set by auth bootstrap once currentUser is known
   bracketLayout: localStorage.getItem("wc26_bracketLayout") || "onesided",
 };
@@ -411,6 +412,10 @@ function getResult(m) {
   if (!live) return manual;
   if (live.isLive) return live;   // in play: the FIFA feed wins
   if (!manual) return live;       // no admin entry yet: show the API result
+  // Auto-archived API value (not a hand-entered score): the live/API feed stays
+  // authoritative so a score snapshotted early (e.g. 3-0) self-corrects to the
+  // real final (e.g. 5-0). Hand-typed admin entries below stay canonical.
+  if (manual.auto) return live;
   // Admin entry is canonical after FT; fill missing scorers/cards from the
   // API, but only when both agree on the score — otherwise the card would
   // contradict itself (e.g. a manual 0:0 showing the API's three scorers).

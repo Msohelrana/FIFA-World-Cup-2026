@@ -90,6 +90,11 @@ function animateCount(el, from, to, badgeHost) {
 function refreshTop5Drawer() {
   const list = document.querySelector("#top5Drawer .top5-list");
   if (!list) return;
+  // Don't show a partial "just me" board before the full set has arrived.
+  if (userPicksSync.available && !state.leaderboardReady) {
+    list.innerHTML = '<p class="top5-empty">Loading…</p>';
+    return;
+  }
   // FLIP: record each row's position before the rebuild, then slide it from its
   // old spot to the new one — same live-standings animation as the leaderboard.
   const firstPos = new Map();
@@ -144,7 +149,7 @@ function openTop5Drawer() {
     state.leaderboardLoaded = true;
     userPicksSync.subscribe();
   }
-  const loading = userPicksSync.available && state.leaderboardUsers.length === 0;
+  const loading = userPicksSync.available && !state.leaderboardReady;
 
   // No backdrop: the drawer floats on the right so the rest of the page stays
   // interactive (switch tabs, scroll, tap cards) while it's open. It only closes
@@ -215,6 +220,15 @@ function renderLeaderboardView() {
     // user's picks and re-renders, then keeps the board live — no separate
     // fetchAll() (that was a duplicate full-collection read).
     userPicksSync.subscribe();
+    return;
+  }
+  // Subscription started (maybe by the Top-5 drawer) but the full set hasn't
+  // arrived yet — keep showing the spinner instead of a partial "just me" board.
+  if (userPicksSync.available && !state.leaderboardReady) {
+    const spinner = document.createElement("p");
+    spinner.className = "picks-lb-loading";
+    spinner.textContent = "Loading leaderboard…";
+    view.appendChild(spinner);
     return;
   }
 

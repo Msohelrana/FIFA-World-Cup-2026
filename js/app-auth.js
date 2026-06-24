@@ -110,6 +110,7 @@ async function logoutUser() {
   saveMatchPicks();                // wipe localStorage too
   state.leaderboardUsers = [];
   state.leaderboardLoaded = false;
+  state.leaderboardReady = false;
   setAdmin(false);                 // any admin powers go away with logout
   updateUserBtn();
   rerenderActive();                // re-render to drop admin-only controls
@@ -232,6 +233,7 @@ async function afterLogin() {
     else state.leaderboardUsers.push(ownServerRow);
   }
   state.leaderboardLoaded = false; // force reload on next leaderboard open
+  state.leaderboardReady = false;
   const localCount = Object.keys(state.matchPicks).length;
   const serverCount = ownServerRow ? Object.keys(ownServerRow.picks).length : 0;
 

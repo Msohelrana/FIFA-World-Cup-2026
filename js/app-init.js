@@ -547,22 +547,34 @@ function archiveFinishedApiResults() {
     if (!live || live.isLive) continue;     // no API data, or not finished yet
     const existing = state.results[id];
     if (existing) {
-      if (Number(existing.score1) === Number(live.score1) &&
-          Number(existing.score2) === Number(live.score2)) {
-        const fill = {};
-        if ((!Array.isArray(existing.scorers) || existing.scorers.length === 0) &&
-            Array.isArray(live.scorers) && live.scorers.length > 0) fill.scorers = live.scorers;
-        if ((!Array.isArray(existing.cards) || existing.cards.length === 0) &&
-            Array.isArray(live.cards) && live.cards.length > 0) fill.cards = live.cards;
-        if (Object.keys(fill).length) {
-          state.results[id] = { ...existing, ...fill };
-          appwriteSync.scheduleMatch(id);
-          archived++;
-        }
+      const sameScore = Number(existing.score1) === Number(live.score1) &&
+                        Number(existing.score2) === Number(live.score2);
+      // A hand-typed admin score that disagrees stays (admin override). An
+      // auto-archived score that disagrees was snapshotted early — correct it.
+      if (!sameScore && !existing.auto) continue;
+      if (!sameScore) {
+        const rec = { score1: live.score1, score2: live.score2, auto: true };
+        if (live.pen1 !== undefined) { rec.pen1 = live.pen1; rec.pen2 = live.pen2; }
+        if (Array.isArray(live.scorers) && live.scorers.length) rec.scorers = live.scorers;
+        if (Array.isArray(live.cards) && live.cards.length) rec.cards = live.cards;
+        state.results[id] = rec;
+        appwriteSync.scheduleMatch(id);
+        archived++;
+        continue;
+      }
+      const fill = {};
+      if ((!Array.isArray(existing.scorers) || existing.scorers.length === 0) &&
+          Array.isArray(live.scorers) && live.scorers.length > 0) fill.scorers = live.scorers;
+      if ((!Array.isArray(existing.cards) || existing.cards.length === 0) &&
+          Array.isArray(live.cards) && live.cards.length > 0) fill.cards = live.cards;
+      if (Object.keys(fill).length) {
+        state.results[id] = { ...existing, ...fill };
+        appwriteSync.scheduleMatch(id);
+        archived++;
       }
       continue;
     }
-    const rec = { score1: live.score1, score2: live.score2 };
+    const rec = { score1: live.score1, score2: live.score2, auto: true };
     if (live.pen1 !== undefined) { rec.pen1 = live.pen1; rec.pen2 = live.pen2; }
     if (Array.isArray(live.scorers) && live.scorers.length) rec.scorers = live.scorers;
     if (Array.isArray(live.cards) && live.cards.length) rec.cards = live.cards;
