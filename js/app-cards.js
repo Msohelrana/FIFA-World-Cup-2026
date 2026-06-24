@@ -423,13 +423,25 @@ function wireScoreInputs(card, m, t1, t2, teamsKnown) {
     }
 
     const hasScorers = Array.isArray(next.scorers) && next.scorers.length > 0;
-    if (v1 === undefined && v2 === undefined && next.pen1 === undefined && next.pen2 === undefined && !hasScorers) {
+    const cleared = v1 === undefined && v2 === undefined && next.pen1 === undefined && next.pen2 === undefined && !hasScorers;
+    if (cleared) {
       delete state.results[id];
     } else {
       state.results[id] = next;
     }
     saveResults();
     appwriteSync.scheduleMatch(id);
+
+    // Cleared the override but the API still has a result → reveal it right away
+    // (re-render so getResult's live value shows, instead of waiting for a manual
+    // "Refresh scorers" click).
+    if (cleared) {
+      const live = (typeof liveScores !== "undefined") ? liveScores.get(id) : null;
+      if (live) {
+        preserveScrollAndFocus(() => renderSchedule(state.selectedTeam, state.selectedDate));
+        return;
+      }
+    }
 
     // Inline updates: result label + PK enabled state — no DOM rebuild
     const newR = state.results[id];
