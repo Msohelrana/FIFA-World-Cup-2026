@@ -750,8 +750,11 @@ function renderPredictBracketMatch(m, predKo) {
   const mn = matchNumber(m);
   card.innerHTML =
     (mn ? `<button type="button" class="bracket-match-no" title="View match card">M${mn}</button>` : "") +
-    row(team1, winner && winner === team1, winner && winner !== team1, !team1, 1) +
-    row(team2, winner && winner === team2, winner && winner !== team2, !team2, 2);
+    `<div class="bracket-teams">` +
+      row(team1, winner && winner === team1, winner && winner !== team1, !team1, 1) +
+      `<span class="bracket-vs">vs</span>` +
+      row(team2, winner && winner === team2, winner && winner !== team2, !team2, 2) +
+    `</div>`;
 
   const noBtn = card.querySelector(".bracket-match-no");
   if (noBtn) noBtn.addEventListener("click", (e) => { e.stopPropagation(); openMatchCardModal(m); });

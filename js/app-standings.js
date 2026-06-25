@@ -303,8 +303,11 @@ function renderBracketMatch(m, ko) {
   const mn = matchNumber(m);
   card.innerHTML =
     (mn ? `<button type="button" class="bracket-match-no" title="View match card">M${mn}</button>` : "") +
-    row(t1, !!resolved1, s1, pen1, winner === t1, winner && winner !== t1, !resolved1) +
-    row(t2, !!resolved2, s2, pen2, winner === t2, winner && winner !== t2, !resolved2);
+    `<div class="bracket-teams">` +
+      row(t1, !!resolved1, s1, pen1, winner === t1, winner && winner !== t1, !resolved1) +
+      `<span class="bracket-vs">vs</span>` +
+      row(t2, !!resolved2, s2, pen2, winner === t2, winner && winner !== t2, !resolved2) +
+    `</div>`;
 
   const noBtn = card.querySelector(".bracket-match-no");
   if (noBtn) noBtn.addEventListener("click", (e) => { e.stopPropagation(); openMatchCardModal(m); });

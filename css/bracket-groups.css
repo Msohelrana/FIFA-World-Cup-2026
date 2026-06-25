@@ -85,11 +85,11 @@
 
 .bracket-right .bracket-team,
 .bracket-right .predict-bracket-team {
-  flex-direction: row-reverse;
+  flex-direction: column;
 }
 
 .bracket-right .bracket-team-name {
-  text-align: right;
+  text-align: center;
 }
 
 .bracket-round {
@@ -135,9 +135,10 @@
 .bracket-match {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 10px;
+  border-radius: 22px;
+  padding: 10px 12px;
   font-size: 12px;
+  text-align: center;
   transition: border-color 0.15s, transform 0.15s;
 }
 
@@ -174,26 +175,31 @@
 
 /* Compact cells for the two-sided fit-to-width bracket */
 .bracket-two-sided .bracket-match {
-  padding: 4px 5px;
+  padding: 7px 4px;
   font-size: 11px;
+  border-radius: 16px;
+}
+.bracket-two-sided .bracket-teams {
+  gap: 4px;
 }
 .bracket-two-sided .bracket-team {
   gap: 4px;
-  padding: 3px 0;
+  padding: 2px 0;
 }
-.bracket-two-sided .bracket-team .flag,
-.bracket-two-sided .bracket .flag-img,
-.bracket-two-sided .flag-img {
-  width: 16px;
-  height: 11px;
+.bracket-two-sided .bracket-team .flag {
+  width: 26px;
+  height: 26px;
+  border-width: 2px;
 }
 .bracket-two-sided .bracket-team-name {
-  font-size: 11px;
-  letter-spacing: 0.02em;
+  font-size: 12px;
+  letter-spacing: 0;
 }
 .bracket-two-sided .bracket-score {
-  min-width: 14px;
-  font-size: 11px;
+  font-size: 12px;
+}
+.bracket-two-sided .bracket-vs {
+  font-size: 8px;
 }
 .bracket-two-sided .bracket-round-title {
   margin-bottom: 8px;
@@ -206,55 +212,86 @@
   font-size: 8px;
 }
 
+/* Two teams side by side around a centered "vs". */
+.bracket-teams {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+}
+
+.bracket-vs {
+  align-self: center;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+/* Each team is a vertical stack: circular flag, bold name, score. */
 .bracket-team {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
+  gap: 5px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 2px 0;
+  text-align: center;
 }
 
-.bracket-team+.bracket-team {
-  border-top: 1px solid rgba(40, 49, 90, 0.5);
-}
-
+/* Circular flag — square crop of the rectangular flag image. */
 .bracket-team .flag {
-  width: 22px;
-  height: 15px;
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--border);
+  background: var(--bg-elev);
 }
 
-.bracket .flag-img {
-  width: 22px;
-  height: 15px;
+.bracket-team .flag-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .bracket-team-name {
-  flex: 1;
-  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 600;
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.1;
 }
 
 .bracket-team.placeholder .bracket-team-name {
   color: var(--text-dim);
-  font-weight: 400;
+  font-weight: 600;
   font-style: italic;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .bracket-score {
-  font-weight: 700;
+  font-weight: 800;
   font-variant-numeric: tabular-nums;
-  min-width: 28px;
-  text-align: right;
+  text-align: center;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .bracket-team.win {
   color: var(--gold);
+}
+
+.bracket-team.win .flag {
+  border-color: var(--gold);
 }
 
 .bracket-team.win .bracket-score {

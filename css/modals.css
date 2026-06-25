@@ -410,7 +410,8 @@
 
 .predict-bracket-team {
   cursor: default;
-  border-radius: 6px;
+  border-radius: 14px;
+  padding: 4px 2px;
   transition: background 0.12s, color 0.12s;
 }
 
