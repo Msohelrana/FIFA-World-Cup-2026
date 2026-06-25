@@ -325,8 +325,9 @@ function centerBracketRound(scrollEl) {
 let _bracketResizeBound = false;
 let _lastBracketStage = null;
 
-function drawBracketConnectors() {
-  const grid = els.bracketView.querySelector(".bracket-two-sided, .bracket");
+function drawBracketConnectors(root) {
+  const host = root || els.bracketView;
+  const grid = host.querySelector(".bracket-two-sided, .bracket");
   if (!grid) return;
   const old = grid.querySelector(".bracket-conn-svg");
   if (old) old.remove();
@@ -386,8 +387,11 @@ function drawBracketConnectors() {
       for (let k = 0; k < tg.length; k++) join(f[2 * k], f[2 * k + 1], tg[k], "left");
     }
 
-    // Both semifinals feed the central final.
-    const finalCard = center ? center.querySelector(".bracket-center-match .bracket-match") : null;
+    // Both semifinals feed the central final. The bracket tab wraps the final
+    // in .bracket-center-match; Table Predict puts it in a plain .bracket-matches.
+    const finalCard = center
+      ? center.querySelector(".bracket-center-match .bracket-match, .bracket-matches > .bracket-match")
+      : null;
     const sfLeft = leftRounds.length ? cardsOf(leftRounds[leftRounds.length - 1])[0] : null;
     const sfRight = rightRounds.length ? cardsOf(rightRounds[0])[0] : null;
     if (finalCard && sfLeft) {

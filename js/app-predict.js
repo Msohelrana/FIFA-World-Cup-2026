@@ -700,6 +700,9 @@ function renderPredictBracketSection() {
     section.appendChild(thirdSection);
   }
 
+  // Draw the bracket connector lines once the section is laid out in the DOM.
+  requestAnimationFrame(() => drawBracketConnectors(section));
+
   return section;
 }
 
