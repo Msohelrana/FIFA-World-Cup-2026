@@ -316,7 +316,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 800;
+  font-weight: 600;
   font-size: 14px;
   line-height: 1.1;
   color: var(--text);
@@ -324,7 +324,7 @@
 
 .bracket-team.placeholder .bracket-team-name {
   color: #c3c9e6;
-  font-weight: 700;
+  font-weight: 500;
   font-style: italic;
   font-size: 12px;
 }
