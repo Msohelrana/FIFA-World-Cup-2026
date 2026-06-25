@@ -594,6 +594,16 @@ function teamAbbr(name) {
   return (name && TEAM_ABBR[name]) || name || "";
 }
 
+// Short date for a bracket cell, e.g. "Jul 5". Uses the fixture's own calendar
+// date (tz-stable) so it can't drift a day from timezone conversion.
+function bracketDate(m) {
+  if (!m || !m.date) return "";
+  const [y, mo, d] = m.date.split("-").map(Number);
+  if (!y || !mo || !d) return "";
+  return new Date(Date.UTC(y, mo - 1, d))
+    .toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
 // --- Live countdown / LIVE state ---
 // LIVE window: group matches are always done within ~110 min real time.
 // Knockout matches can run an extra 30 min (extra time) + ~15 min (penalties),

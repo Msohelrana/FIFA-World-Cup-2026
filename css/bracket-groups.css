@@ -46,8 +46,9 @@
 
 .bracket {
   display: flex;
-  gap: 18px;
-  min-width: 1100px;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
   align-items: stretch;
 }
 
@@ -75,12 +76,66 @@
   flex: 0 0 auto;
   min-width: 0;
   padding: 0 2px;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
 }
 
-.bracket-center .bracket-matches {
-  flex: 1;
-  justify-content: center;
-  min-height: unset;
+.bracket-center .bracket-match {
+  min-width: 124px;
+}
+
+/* Champion trophy at the heart of the two-sided bracket */
+.bracket-trophy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.bracket-trophy-icon {
+  font-size: 38px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(255, 209, 102, 0.35));
+}
+.bracket-trophy-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+/* Final / Bronze-final cells stacked under the trophy, each with a badge */
+.bracket-center-match {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.bracket-badge {
+  padding: 2px 10px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+}
+.badge-final {
+  color: #1a1408;
+  background: var(--gold);
+}
+.badge-bronze {
+  color: #04222e;
+  background: var(--accent-2);
+}
+
+/* Match date under each bracket cell */
+.bracket-date {
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
 }
 
 .bracket-right .bracket-team,
@@ -93,8 +148,8 @@
 }
 
 .bracket-round {
-  flex: 1;
-  min-width: 200px;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
 }
@@ -167,10 +222,12 @@
   border-color: rgba(76, 201, 240, 0.6);
 }
 
-/* Team name: full by default (one-sided bracket), 3-letter code in the
-   compact two-sided layout so all 9 columns fit without scrolling. */
+/* Team name: bracket cells use the 3-letter code so every column fits
+   without horizontal scrolling. Full name stays in the title + match card. */
 .tn-abbr { display: none; }
+.bracket .tn-full,
 .bracket-two-sided .tn-full { display: none; }
+.bracket .tn-abbr,
 .bracket-two-sided .tn-abbr { display: inline; }
 
 /* Compact cells for the two-sided fit-to-width bracket */
@@ -200,6 +257,10 @@
 }
 .bracket-two-sided .bracket-vs {
   font-size: 8px;
+}
+.bracket-two-sided .bracket-date {
+  margin-top: 4px;
+  font-size: 9px;
 }
 .bracket-two-sided .bracket-round-title {
   margin-bottom: 8px;
@@ -328,6 +389,29 @@
 
   .bracket-matches {
     min-height: 600px;
+  }
+
+  /* Shrink cells so the whole bracket still fits the width without scrolling */
+  .bracket-team .flag {
+    width: 22px;
+    height: 22px;
+  }
+  .bracket-team-name {
+    font-size: 11px;
+  }
+  .bracket-score,
+  .bracket-date {
+    font-size: 10px;
+  }
+  .bracket-teams {
+    gap: 3px;
+  }
+  .bracket-match {
+    padding: 6px 4px;
+    border-radius: 14px;
+  }
+  .bracket-third .bracket-match {
+    min-width: 0;
   }
 }
 

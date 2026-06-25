@@ -754,7 +754,8 @@ function renderPredictBracketMatch(m, predKo) {
       row(team1, winner && winner === team1, winner && winner !== team1, !team1, 1) +
       `<span class="bracket-vs">vs</span>` +
       row(team2, winner && winner === team2, winner && winner !== team2, !team2, 2) +
-    `</div>`;
+    `</div>` +
+    (bracketDate(m) ? `<div class="bracket-date">${bracketDate(m)}</div>` : "");
 
   const noBtn = card.querySelector(".bracket-match-no");
   if (noBtn) noBtn.addEventListener("click", (e) => { e.stopPropagation(); openMatchCardModal(m); });

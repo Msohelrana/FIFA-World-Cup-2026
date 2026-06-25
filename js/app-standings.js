@@ -233,14 +233,28 @@ function renderBracket(ko) {
 
     const center = document.createElement("div");
     center.className = "bracket-center";
-    const centerTitle = document.createElement("h3");
-    centerTitle.className = "bracket-round-title";
-    centerTitle.textContent = "Final";
-    center.appendChild(centerTitle);
-    const finalDiv = document.createElement("div");
-    finalDiv.className = "bracket-matches";
-    for (const m of allFinal) finalDiv.appendChild(renderBracketMatch(m, ko));
-    center.appendChild(finalDiv);
+
+    const trophy = document.createElement("div");
+    trophy.className = "bracket-trophy";
+    trophy.innerHTML = `<div class="bracket-trophy-icon" aria-hidden="true">🏆</div><div class="bracket-trophy-label">Champion</div>`;
+    center.appendChild(trophy);
+
+    for (const m of allFinal) {
+      const wrap = document.createElement("div");
+      wrap.className = "bracket-center-match";
+      wrap.appendChild(renderBracketMatch(m, ko));
+      wrap.insertAdjacentHTML("beforeend", `<span class="bracket-badge badge-final">Final</span>`);
+      center.appendChild(wrap);
+    }
+
+    const thirdM = FIXTURES.find(m => m.stage === "third");
+    if (thirdM) {
+      const wrap = document.createElement("div");
+      wrap.className = "bracket-center-match";
+      wrap.appendChild(renderBracketMatch(thirdM, ko));
+      wrap.insertAdjacentHTML("beforeend", `<span class="bracket-badge badge-bronze">Bronze Final</span>`);
+      center.appendChild(wrap);
+    }
 
     const rightHalf = document.createElement("div");
     rightHalf.className = "bracket-half bracket-right";
@@ -265,7 +279,8 @@ function renderBracket(ko) {
 
   els.bracketView.appendChild(wrap);
 
-  const thirdMatch = FIXTURES.find(m => m.stage === "third");
+  // Two-sided already shows the bronze final in the center column.
+  const thirdMatch = state.bracketLayout === "twosided" ? null : FIXTURES.find(m => m.stage === "third");
   if (thirdMatch) {
     const thirdSection = document.createElement("div");
     thirdSection.className = "bracket-third";
@@ -307,7 +322,8 @@ function renderBracketMatch(m, ko) {
       row(t1, !!resolved1, s1, pen1, winner === t1, winner && winner !== t1, !resolved1) +
       `<span class="bracket-vs">vs</span>` +
       row(t2, !!resolved2, s2, pen2, winner === t2, winner && winner !== t2, !resolved2) +
-    `</div>`;
+    `</div>` +
+    (bracketDate(m) ? `<div class="bracket-date">${bracketDate(m)}</div>` : "");
 
   const noBtn = card.querySelector(".bracket-match-no");
   if (noBtn) noBtn.addEventListener("click", (e) => { e.stopPropagation(); openMatchCardModal(m); });
