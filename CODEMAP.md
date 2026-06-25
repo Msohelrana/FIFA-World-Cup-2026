@@ -115,7 +115,8 @@ maintainability. They are still plain global `<script>`/`<link>` files (no build
 | `renderSchedule` (+ day grouping helpers) | [1125](app.js#L1125), [1075](app.js#L1075) |
 | `populateTeams` / `populateDates` / `populateTimezones` | [433](app.js#L433), [445](app.js#L445), [468](app.js#L468) |
 | Timezone conversion helpers (`fixtureToUTC`, `formatTimeInTz`, …) | [482–516](app.js#L482) |
-| `flagFor(name)` | [540](app.js#L540) |
+| `flagFor(name)` | [584](js/app-core.js#L584) |
+| `teamAbbr(name)` — 3-letter code for compact bracket | [591](js/app-core.js#L591) |
 
 ### Standings & groups
 | What | Line |
@@ -224,7 +225,8 @@ maintainability. They are still plain global `<script>`/`<link>` files (no build
 | ↳ Semifinals | [175](fixtures.js#L175) |
 | ↳ Third-place | [179](fixtures.js#L179) |
 | ↳ Final | [182](fixtures.js#L182) |
-| `TEAM_FLAGS` — team → ISO country code | [188](fixtures.js#L188) |
+| `TEAM_FLAGS` — team → ISO country code | [188](js/fixtures.js#L188) |
+| `TEAM_ABBR` — team → FIFA 3-letter code | [239](js/fixtures.js#L239) |
 | `SPECIAL_FLAG_URLS` — Scotland/England flags | [239](fixtures.js#L239) |
 | `STAGE_LABELS` | [244](fixtures.js#L244) |
 

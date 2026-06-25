@@ -743,7 +743,7 @@ function renderPredictBracketMatch(m, predKo) {
            tabindex="${clickable ? "0" : "-1"}"
            >
         <span class="flag">${team ? flagFor(team) : ""}</span>
-        <span class="bracket-team-name" title="${safeTeam}">${team || "TBD"}</span>
+        <span class="bracket-team-name" title="${safeTeam}"><span class="tn-full">${team || "TBD"}</span><span class="tn-abbr">${team ? teamAbbr(team) : "TBD"}</span></span>
       </div>`;
   };
 

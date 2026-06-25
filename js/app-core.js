@@ -588,6 +588,12 @@ function flagFor(name) {
   return `<img class="flag-img" src="${src}" alt="${name} flag" loading="lazy">`;
 }
 
+// 3-letter code for the compact bracket; falls back to the raw name/placeholder
+// (e.g. "W73", "TBD") when there's no abbreviation.
+function teamAbbr(name) {
+  return (name && TEAM_ABBR[name]) || name || "";
+}
+
 // --- Live countdown / LIVE state ---
 // LIVE window: group matches are always done within ~110 min real time.
 // Knockout matches can run an extra 30 min (extra time) + ~15 min (penalties),

@@ -51,25 +51,30 @@
   align-items: stretch;
 }
 
+/* Two-sided bracket: shrinks to fit the viewport — no horizontal scroll.
+   Team names collapse to 3-letter codes (see .tn-abbr) so 9 columns fit. */
 .bracket-two-sided {
   display: flex;
   align-items: stretch;
-  min-width: 1600px;
-  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  gap: 3px;
 }
 
 .bracket-half {
   display: flex;
-  flex: 1;
-  gap: 4px;
+  flex: 1 1 0;
+  min-width: 0;
+  gap: 3px;
   align-items: stretch;
 }
 
 .bracket-center {
   display: flex;
   flex-direction: column;
-  min-width: 180px;
-  padding: 0 6px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 0 2px;
 }
 
 .bracket-center .bracket-matches {
@@ -95,7 +100,8 @@
 }
 
 .bracket-two-sided .bracket-round {
-  min-width: 165px;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .bracket-round-title {
@@ -158,6 +164,46 @@
 .bracket-match-no:hover {
   background: rgba(76, 201, 240, 0.22);
   border-color: rgba(76, 201, 240, 0.6);
+}
+
+/* Team name: full by default (one-sided bracket), 3-letter code in the
+   compact two-sided layout so all 9 columns fit without scrolling. */
+.tn-abbr { display: none; }
+.bracket-two-sided .tn-full { display: none; }
+.bracket-two-sided .tn-abbr { display: inline; }
+
+/* Compact cells for the two-sided fit-to-width bracket */
+.bracket-two-sided .bracket-match {
+  padding: 4px 5px;
+  font-size: 11px;
+}
+.bracket-two-sided .bracket-team {
+  gap: 4px;
+  padding: 3px 0;
+}
+.bracket-two-sided .bracket-team .flag,
+.bracket-two-sided .bracket .flag-img,
+.bracket-two-sided .flag-img {
+  width: 16px;
+  height: 11px;
+}
+.bracket-two-sided .bracket-team-name {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.bracket-two-sided .bracket-score {
+  min-width: 14px;
+  font-size: 11px;
+}
+.bracket-two-sided .bracket-round-title {
+  margin-bottom: 8px;
+  padding: 6px 2px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+.bracket-two-sided .bracket-match-no {
+  padding: 1px 4px;
+  font-size: 8px;
 }
 
 .bracket-team {

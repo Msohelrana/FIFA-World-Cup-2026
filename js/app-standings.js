@@ -296,7 +296,7 @@ function renderBracketMatch(m, ko) {
   const row = (team, resolvedFlag, score, pen, isWinner, isLoser, isPlaceholder) => `
     <div class="bracket-team ${isWinner ? "win" : ""} ${isLoser ? "lose" : ""} ${isPlaceholder ? "placeholder" : ""}">
       <span class="flag">${resolvedFlag ? flagFor(team) : ""}</span>
-      <span class="bracket-team-name" title="${team}">${team}</span>
+      <span class="bracket-team-name" title="${team}"><span class="tn-full">${team}</span><span class="tn-abbr">${teamAbbr(team)}</span></span>
       <span class="bracket-score">${score === "" ? "" : score + pen}</span>
     </div>`;
 

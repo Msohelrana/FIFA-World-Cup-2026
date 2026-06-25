@@ -6,7 +6,7 @@
 //   - Appwrite realtime (WebSocket): not intercepted; the browser handles it natively
 //   - Anything else same-origin: stale-while-revalidate
 
-const CACHE_VERSION = "1781800024";
+const CACHE_VERSION = "1781800025";
 const APP_CACHE = `wc2026-app-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `wc2026-runtime-${CACHE_VERSION}`;
 
