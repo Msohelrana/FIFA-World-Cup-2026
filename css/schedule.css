@@ -414,10 +414,11 @@
 }
 
 .flag-img {
-  width: 26px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
+  aspect-ratio: 1 / 1;
   object-fit: cover;
-  border-radius: 3px;
+  border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
   display: block;
 }
@@ -555,7 +556,7 @@
 }
 .team-modal-header h2 { margin: 0; font-size: 19px; }
 .team-modal-flag { flex-shrink: 0; font-size: 26px; line-height: 1; }
-.team-modal-flag .flag-img { width: 34px; height: auto; }
+.team-modal-flag .flag-img { width: 34px; height: 34px; }
 .team-modal-sub {
   margin-top: 2px;
   font-size: 12px;
@@ -635,7 +636,7 @@
   align-items: center;
   gap: 5px;
 }
-.form-opp-flag .flag-img { width: 18px; height: auto; vertical-align: middle; }
+.form-opp-flag .flag-img { width: 18px; height: 18px; vertical-align: middle; }
 .form-score { font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .form-comp {
   width: 38%;
