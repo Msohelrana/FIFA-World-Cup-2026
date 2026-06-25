@@ -445,7 +445,7 @@ function computeStandings(groupLetter, resolveResult = getResult, applyOverride 
   const teams = GROUPS[groupLetter];
   const stats = {};
   teams.forEach(t => {
-    stats[t] = { team: t, played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, gd: 0, points: 0, fp: 0 };
+    stats[t] = { team: t, played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, gd: 0, points: 0, fp: 0, form: [] };
   });
 
   const playedMatches = []; // for head-to-head tiebreaks
@@ -471,9 +471,9 @@ function computeStandings(groupLetter, resolveResult = getResult, applyOverride 
     a.played++; b.played++;
     a.gf += r.score1; a.ga += r.score2;
     b.gf += r.score2; b.ga += r.score1;
-    if (r.score1 > r.score2) { a.wins++; a.points += 3; b.losses++; }
-    else if (r.score2 > r.score1) { b.wins++; b.points += 3; a.losses++; }
-    else { a.draws++; b.draws++; a.points++; b.points++; }
+    if (r.score1 > r.score2) { a.wins++; a.points += 3; b.losses++; a.form.push("W"); b.form.push("L"); }
+    else if (r.score2 > r.score1) { b.wins++; b.points += 3; a.losses++; b.form.push("W"); a.form.push("L"); }
+    else { a.draws++; b.draws++; a.points++; b.points++; a.form.push("D"); b.form.push("D"); }
   }
 
   for (const t in stats) stats[t].gd = stats[t].gf - stats[t].ga;
@@ -697,6 +697,7 @@ function buildStandingsTable(letter, thirdQualifyingGroups) {
           <th class="team-col">Team</th>
           <th>P</th><th>W</th><th>D</th><th>L</th>
           <th>GF</th><th>GA</th><th>GD</th><th class="pts">Pts</th>
+          <th class="form-col" title="Recent form (oldest → newest)">Form</th>
         </tr>
       </thead>
       <tbody>
@@ -718,6 +719,9 @@ function buildStandingsTable(letter, thirdQualifyingGroups) {
           ? `<span class="clinch-badge clinch-out" title="Eliminated — can't reach the top 3">❌ Out</span>`
           : "";
     const rowCls = cls + (clinch[r.team] === "out" ? " eliminated-row" : "");
+    const formHTML = (r.form && r.form.length)
+      ? `<span class="form-pills">${r.form.map(x => `<span class="form-pill form-${x}">${x}</span>`).join("")}</span>`
+      : `<span class="form-empty">–</span>`;
     return `
           <tr class="${rowCls}" data-team="${escapeHTML(r.team)}">
             <td class="pos">${i + 1}${moveBtns}</td>
@@ -730,6 +734,7 @@ function buildStandingsTable(letter, thirdQualifyingGroups) {
             <td>${r.ga}</td>
             <td>${r.gd > 0 ? "+" + r.gd : r.gd}</td>
             <td class="pts"><span class="st-pts-val">${r.points}</span></td>
+            <td class="form-col">${formHTML}</td>
           </tr>`;
   }).join("")}
       </tbody>

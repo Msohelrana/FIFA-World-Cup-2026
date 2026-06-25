@@ -454,6 +454,25 @@
   color: var(--text-dim);
 }
 
+/* Recent-form guide column */
+.standings-table .form-col {
+  text-align: center;
+  white-space: nowrap;
+}
+.standings-table .form-pills {
+  display: inline-flex;
+  gap: 3px;
+}
+.standings-table .form-pill {
+  width: 17px;
+  height: 17px;
+  font-size: 9px;
+  border-radius: 4px;
+}
+.standings-table .form-empty {
+  color: var(--text-dim);
+}
+
 .standings-table .team-col {
   text-align: left;
   display: flex;
