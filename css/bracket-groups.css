@@ -201,8 +201,8 @@
 .bracket-match-no {
   display: inline-block;
   margin-bottom: 3px;
-  padding: 1px 6px;
-  font-size: 9px;
+  padding: 1px 7px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -266,8 +266,8 @@
   letter-spacing: 0.04em;
 }
 .bracket-two-sided .bracket-match-no {
-  padding: 1px 4px;
-  font-size: 8px;
+  padding: 1px 6px;
+  font-size: 10px;
 }
 
 /* Two teams side by side around a centered "vs". */
