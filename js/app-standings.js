@@ -168,6 +168,11 @@ function moveStandingsRow(letter, fromIndex, dir) {
 }
 
 function renderBracket(ko) {
+  // Preserve the user's horizontal scroll across data refreshes (so a live
+  // update doesn't yank them away from where they were looking).
+  const prevScroll = els.bracketView.querySelector(".bracket-scroll");
+  const savedScrollLeft = prevScroll ? prevScroll.scrollLeft : null;
+
   els.bracketView.innerHTML = "";
   if (!ko) ko = buildCurrentBracketKo();
 
@@ -254,9 +259,18 @@ function renderBracket(ko) {
 
   els.bracketView.appendChild(wrap);
 
-  // Draw the connector lines once the cards have been laid out. Redraw on
-  // resize so they stay aligned (the bracket scrolls horizontally on mobile).
-  requestAnimationFrame(drawBracketConnectors);
+  const stage = currentBracketStage();
+  requestAnimationFrame(() => {
+    drawBracketConnectors();
+    // Center on the live round when the round has advanced or on a fresh open;
+    // otherwise keep the user where they had scrolled to.
+    if (stage !== _lastBracketStage || savedScrollLeft == null || savedScrollLeft === 0) {
+      centerBracketRound(wrap);
+    } else {
+      wrap.scrollLeft = savedScrollLeft;
+    }
+    _lastBracketStage = stage;
+  });
   if (!_bracketResizeBound) {
     _bracketResizeBound = true;
     let raf = 0;
@@ -269,9 +283,47 @@ function renderBracket(ko) {
   }
 }
 
+// The earliest knockout round that still has an unfinished match — i.e. the
+// round the tournament is currently on.
+function currentBracketStage() {
+  const order = ["r32", "r16", "qf", "sf", "final"];
+  for (const st of order) {
+    const ms = FIXTURES.filter(m => m.stage === st);
+    if (!ms.length) continue;
+    const allDone = ms.every(m => {
+      const r = getResult(m);
+      return r && r.score1 !== undefined && r.score2 !== undefined && !r.isLive;
+    });
+    if (!allDone) return st;
+  }
+  return "final";
+}
+
+// Scroll the bracket so the current round is centered in the viewport, pushing
+// completed (outer) rounds off-screen to the left.
+function centerBracketRound(scrollEl) {
+  if (!scrollEl) return;
+  if (scrollEl.scrollWidth <= scrollEl.clientWidth + 4) return; // nothing to scroll
+  const stage = currentBracketStage();
+  let col;
+  if (stage === "final") {
+    col = scrollEl.querySelector(".bracket-center");
+  } else {
+    const left = scrollEl.querySelector(".bracket-left");
+    const idx = { r32: 0, r16: 1, qf: 2, sf: 3 }[stage];
+    if (left) col = left.querySelectorAll(":scope > .bracket-round")[idx];
+  }
+  if (!col) return;
+  const sRect = scrollEl.getBoundingClientRect();
+  const cRect = col.getBoundingClientRect();
+  const colCenter = (cRect.left - sRect.left) + scrollEl.scrollLeft + cRect.width / 2;
+  scrollEl.scrollLeft = colCenter - scrollEl.clientWidth / 2;
+}
+
 // SVG bracket connectors — drawn from measured card positions so they stay
 // correct in the mirrored two-sided layout.
 let _bracketResizeBound = false;
+let _lastBracketStage = null;
 
 function drawBracketConnectors() {
   const grid = els.bracketView.querySelector(".bracket-two-sided, .bracket");
