@@ -23,11 +23,18 @@
   display: flex;
   align-items: stretch;
   width: 100%;
-  /* Stay full-size and scroll horizontally on narrow screens instead of
-     shrinking the cards into an unreadable mess. */
-  min-width: 1080px;
+  /* Desktop: shrink to fit the container (no scroll). */
+  min-width: 0;
   gap: 8px;
   position: relative;
+}
+
+/* Narrow screens: keep cards full-size and scroll horizontally instead of
+   shrinking them into an unreadable mess. */
+@media (max-width: 760px) {
+  .bracket-two-sided {
+    min-width: 1080px;
+  }
 }
 
 .bracket-half {
