@@ -658,7 +658,27 @@ function renderPredictBracketSection() {
     return col;
   }
 
-  {
+  if (isMobileBracket()) {
+    // Mobile: rounds stacked top-to-bottom, matches in a compact grid.
+    const vert = document.createElement("div");
+    vert.className = "bracket-vertical";
+    const vround = (label, matches) => {
+      const sec = document.createElement("div");
+      sec.className = "bracket-vround";
+      sec.innerHTML = `<h3 class="bracket-round-title">${label}</h3>`;
+      const g = document.createElement("div");
+      g.className = "bracket-vmatches";
+      for (const m of matches) g.appendChild(renderPredictBracketMatch(m, predKo));
+      sec.appendChild(g);
+      vert.appendChild(sec);
+    };
+    vround("R32", allR32);
+    vround("R16", allR16);
+    vround("Quarterfinals", allQF);
+    vround("Semifinals", allSF);
+    vround("Final", allFinal);
+    scrollWrap.appendChild(vert);
+  } else {
     const grid = document.createElement("div");
     grid.className = "bracket-two-sided";
 

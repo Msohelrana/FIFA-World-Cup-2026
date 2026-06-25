@@ -203,7 +203,54 @@ function renderBracket(ko) {
   const wrap = document.createElement("div");
   wrap.className = "bracket-scroll";
 
-  {
+  const mobile = isMobileBracket();
+  _bracketIsMobile = mobile;
+
+  if (mobile) {
+    // ── Mobile: rounds stacked top-to-bottom, matches in a compact grid ──────
+    const vert = document.createElement("div");
+    vert.className = "bracket-vertical";
+
+    const vround = (label, matches) => {
+      const sec = document.createElement("div");
+      sec.className = "bracket-vround";
+      const t = document.createElement("h3");
+      t.className = "bracket-round-title";
+      t.textContent = label;
+      sec.appendChild(t);
+      const g = document.createElement("div");
+      g.className = "bracket-vmatches";
+      for (const m of matches) g.appendChild(renderBracketMatch(m, ko));
+      sec.appendChild(g);
+      vert.appendChild(sec);
+    };
+
+    vround("R32", allR32);
+    vround("R16", allR16);
+    vround("Quarterfinals", allQF);
+    vround("Semifinals", allSF);
+
+    const fin = document.createElement("div");
+    fin.className = "bracket-vround bracket-vfinal";
+    fin.innerHTML = `<div class="bracket-trophy"><div class="bracket-trophy-icon" aria-hidden="true">🏆</div><div class="bracket-trophy-label">Champion</div></div>`;
+    for (const m of allFinal) {
+      const cm = document.createElement("div");
+      cm.className = "bracket-center-match";
+      cm.appendChild(renderBracketMatch(m, ko));
+      cm.insertAdjacentHTML("beforeend", `<span class="bracket-badge badge-final">Final</span>`);
+      fin.appendChild(cm);
+    }
+    const thirdM = FIXTURES.find(m => m.stage === "third");
+    if (thirdM) {
+      const cm = document.createElement("div");
+      cm.className = "bracket-center-match";
+      cm.appendChild(renderBracketMatch(thirdM, ko));
+      cm.insertAdjacentHTML("beforeend", `<span class="bracket-badge badge-bronze">Bronze Final</span>`);
+      fin.appendChild(cm);
+    }
+    vert.appendChild(fin);
+    wrap.appendChild(vert);
+  } else {
     const grid = document.createElement("div");
     grid.className = "bracket-two-sided";
 
@@ -254,23 +301,31 @@ function renderBracket(ko) {
 
   els.bracketView.appendChild(wrap);
 
-  // Draw the connector lines once the cards have been laid out.
-  requestAnimationFrame(drawBracketConnectors);
+  // Connector lines only apply to the desktop two-sided layout.
+  if (!mobile) requestAnimationFrame(drawBracketConnectors);
   if (!_bracketResizeBound) {
     _bracketResizeBound = true;
     let raf = 0;
     window.addEventListener("resize", () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        if (state.view === "bracket" && !els.bracketView.hidden) drawBracketConnectors();
+        if (state.view !== "bracket" || els.bracketView.hidden) return;
+        // Switching across the mobile/desktop boundary changes the whole layout.
+        if (isMobileBracket() !== _bracketIsMobile) renderBracket();
+        else if (!_bracketIsMobile) drawBracketConnectors();
       });
     });
   }
 }
 
+function isMobileBracket() {
+  return window.matchMedia("(max-width: 700px)").matches;
+}
+
 // SVG bracket connectors — drawn from measured card positions so they stay
-// correct in both the one-sided and mirrored two-sided layouts.
+// correct in the mirrored two-sided layout.
 let _bracketResizeBound = false;
+let _bracketIsMobile = false;
 
 function drawBracketConnectors() {
   const grid = els.bracketView.querySelector(".bracket-two-sided, .bracket");
