@@ -421,7 +421,10 @@ function renderBracketMatch(m, ko) {
   const winner = computeWinnerFromResult(m, r, t1, t2);
 
   const card = document.createElement("div");
-  card.className = "bracket-match";
+  card.className = "bracket-match clickable";
+  card.setAttribute("role", "button");
+  card.tabIndex = 0;
+  card.title = "View match card";
 
   const s1 = r.score1 !== undefined ? r.score1 : "";
   const s2 = r.score2 !== undefined ? r.score2 : "";
@@ -437,7 +440,7 @@ function renderBracketMatch(m, ko) {
 
   const mn = matchNumber(m);
   card.innerHTML =
-    (mn ? `<button type="button" class="bracket-match-no" title="View match card">M${mn}</button>` : "") +
+    (mn ? `<span class="bracket-match-no">M${mn}</span>` : "") +
     `<div class="bracket-teams">` +
       row(t1, !!resolved1, s1, pen1, winner === t1, winner && winner !== t1, !resolved1) +
       `<span class="bracket-vs">vs</span>` +
@@ -445,8 +448,11 @@ function renderBracketMatch(m, ko) {
     `</div>` +
     (bracketDate(m) ? `<div class="bracket-date">${bracketDate(m)}</div>` : "");
 
-  const noBtn = card.querySelector(".bracket-match-no");
-  if (noBtn) noBtn.addEventListener("click", (e) => { e.stopPropagation(); openMatchCardModal(m); });
+  // The whole card opens the match card.
+  card.addEventListener("click", () => openMatchCardModal(m));
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openMatchCardModal(m); }
+  });
 
   return card;
 }

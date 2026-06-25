@@ -193,11 +193,23 @@
   transition: border-color 0.15s, transform 0.15s;
 }
 
+.bracket-match.clickable {
+  cursor: pointer;
+}
+.bracket-match.clickable:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
 .bracket-match:hover {
   border-color: var(--accent-2);
 }
+/* The whole card is clickable, so lift the card (not just the badge) on hover. */
+.bracket-match.clickable:hover {
+  border-color: var(--accent-2);
+  transform: translateY(-2px);
+}
 
-/* FIFA match number atop each knockout bracket cell — clickable to view the card */
+/* FIFA match number atop each knockout bracket cell */
 .bracket-match-no {
   display: inline-block;
   margin-bottom: 3px;
@@ -210,10 +222,18 @@
   background: rgba(76, 201, 240, 0.1);
   border: 1px solid rgba(76, 201, 240, 0.3);
   border-radius: 999px;
+}
+.bracket-match.clickable:hover .bracket-match-no {
+  background: rgba(76, 201, 240, 0.22);
+  border-color: rgba(76, 201, 240, 0.6);
+}
+
+/* In Table Predict the badge itself is the button (teams handle picking). */
+button.bracket-match-no {
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
-.bracket-match-no:hover {
+button.bracket-match-no:hover {
   background: rgba(76, 201, 240, 0.22);
   border-color: rgba(76, 201, 240, 0.6);
 }
