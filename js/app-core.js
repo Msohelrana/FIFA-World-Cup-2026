@@ -72,7 +72,6 @@ const state = {
   leaderboardLoaded: false,      // true once the realtime subscription has been started (lazy)
   leaderboardReady: false,       // true once the FULL board has actually arrived (not just self)
   isAdmin: false,                // set by auth bootstrap once currentUser is known
-  bracketLayout: localStorage.getItem("wc26_bracketLayout") || "onesided",
 };
 
 function isViewingShared() { return !!state.sharedPrediction; }

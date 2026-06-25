@@ -3,42 +3,6 @@
   margin-top: 20px;
 }
 
-.bracket-layout-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.bracket-layout-label {
-  font-size: 13px;
-  color: var(--text-dim);
-  font-weight: 600;
-}
-
-.bracket-layout-btn {
-  padding: 5px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface2);
-  color: var(--text-dim);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
-}
-
-.bracket-layout-btn:hover {
-  background: var(--surface3);
-  color: var(--text);
-}
-
-.bracket-layout-btn.active {
-  background: rgba(76, 201, 240, 0.15);
-  border-color: rgba(76, 201, 240, 0.5);
-  color: var(--accent-2);
-}
-
 .bracket-scroll {
   overflow-x: auto;
   padding-bottom: 10px;

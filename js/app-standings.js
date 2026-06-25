@@ -180,23 +180,6 @@ function renderBracket(ko) {
     els.bracketView.appendChild(banner);
   }
 
-  // ── Layout toggle ─────────────────────────────────────────────────────────
-  const toggleBar = document.createElement("div");
-  toggleBar.className = "bracket-layout-toggle";
-  toggleBar.innerHTML = `
-    <span class="bracket-layout-label">Layout:</span>
-    <button type="button" class="bracket-layout-btn${state.bracketLayout === "onesided" ? " active" : ""}" data-layout="onesided">One-sided</button>
-    <button type="button" class="bracket-layout-btn${state.bracketLayout === "twosided" ? " active" : ""}" data-layout="twosided">Two-sided</button>
-  `;
-  toggleBar.querySelectorAll(".bracket-layout-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      state.bracketLayout = btn.dataset.layout;
-      localStorage.setItem("wc26_bracketLayout", state.bracketLayout);
-      renderBracket();
-    });
-  });
-  els.bracketView.appendChild(toggleBar);
-
   const allR32   = getMatchesInBracketOrder("r32");
   const allR16   = getMatchesInBracketOrder("r16");
   const allQF    = getMatchesInBracketOrder("qf");
@@ -220,7 +203,7 @@ function renderBracket(ko) {
   const wrap = document.createElement("div");
   wrap.className = "bracket-scroll";
 
-  if (state.bracketLayout === "twosided") {
+  {
     const grid = document.createElement("div");
     grid.className = "bracket-two-sided";
 
@@ -267,30 +250,9 @@ function renderBracket(ko) {
     grid.appendChild(center);
     grid.appendChild(rightHalf);
     wrap.appendChild(grid);
-  } else {
-    const bracket = document.createElement("div");
-    bracket.className = "bracket";
-    for (const [label, matches] of [
-      ["R32", allR32], ["R16", allR16],
-      ["Quarterfinals", allQF], ["Semifinals", allSF], ["Final", allFinal],
-    ]) bracket.appendChild(makeRound(label, matches));
-    wrap.appendChild(bracket);
   }
 
   els.bracketView.appendChild(wrap);
-
-  // Two-sided already shows the bronze final in the center column.
-  const thirdMatch = state.bracketLayout === "twosided" ? null : FIXTURES.find(m => m.stage === "third");
-  if (thirdMatch) {
-    const thirdSection = document.createElement("div");
-    thirdSection.className = "bracket-third";
-    const title = document.createElement("h3");
-    title.className = "bracket-round-title";
-    title.textContent = "Third-Place Match";
-    thirdSection.appendChild(title);
-    thirdSection.appendChild(renderBracketMatch(thirdMatch, ko));
-    els.bracketView.appendChild(thirdSection);
-  }
 
   // Draw the connector lines once the cards have been laid out.
   requestAnimationFrame(drawBracketConnectors);

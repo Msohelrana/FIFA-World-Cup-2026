@@ -636,21 +636,8 @@ function renderPredictBracketSection() {
     <h2 class="predict-step-title"><span class="predict-step-num">3</span> Bracket</h2>
     <p class="predict-step-hint">Tap a team in each match to pick the winner. Picks propagate to the next round automatically.</p>
     ${champion ? `<div class="ko-banner champion-banner">🏆 <span class="flag">${flagFor(champion)}</span> <strong>${escapeHTML(champion)}</strong> — your predicted World Champion!</div>` : ""}
-    <div class="bracket-layout-toggle">
-      <span class="bracket-layout-label">Layout:</span>
-      <button type="button" class="bracket-layout-btn${state.bracketLayout === "onesided" ? " active" : ""}" data-layout="onesided">One-sided</button>
-      <button type="button" class="bracket-layout-btn${state.bracketLayout === "twosided" ? " active" : ""}" data-layout="twosided">Two-sided</button>
-    </div>
     <div class="bracket-scroll"></div>
   `;
-
-  section.querySelectorAll(".bracket-layout-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-      state.bracketLayout = btn.dataset.layout;
-      localStorage.setItem("wc26_bracketLayout", state.bracketLayout);
-      renderPredict();
-    });
-  });
 
   const scrollWrap = section.querySelector(".bracket-scroll");
 
@@ -671,7 +658,7 @@ function renderPredictBracketSection() {
     return col;
   }
 
-  if (state.bracketLayout === "twosided") {
+  {
     const grid = document.createElement("div");
     grid.className = "bracket-two-sided";
 
@@ -701,14 +688,6 @@ function renderPredictBracketSection() {
     grid.appendChild(center);
     grid.appendChild(rightHalf);
     scrollWrap.appendChild(grid);
-  } else {
-    const bracket = document.createElement("div");
-    bracket.className = "bracket predict-bracket";
-    for (const [label, matches] of [
-      ["R32", allR32], ["R16", allR16],
-      ["Quarterfinals", allQF], ["Semifinals", allSF], ["Final", allFinal],
-    ]) bracket.appendChild(makeRound(label, matches));
-    scrollWrap.appendChild(bracket);
   }
 
   // Third-place match
