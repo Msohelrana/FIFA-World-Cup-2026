@@ -368,9 +368,6 @@ button.bracket-match-no:hover {
   text-align: center;
   color: var(--text-dim);
   font-size: 14px;
-  /* Always reserve the score line so a card doesn't grow once a score is
-     written — keeps every card the same height. */
-  min-height: 1.2em;
 }
 
 .bracket-team.win {
