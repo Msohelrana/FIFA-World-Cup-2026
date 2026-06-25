@@ -593,10 +593,15 @@ function teamAbbr(name) {
   return (name && TEAM_ABBR[name]) || name || "";
 }
 
-// Short date for a bracket cell, e.g. "Jul 5". Uses the fixture's own calendar
-// date (tz-stable) so it can't drift a day from timezone conversion.
+// Short date for a bracket cell, e.g. "Jul 5". Converted into the selected
+// timezone (via the real kickoff instant) so it matches the Schedule tab.
 function bracketDate(m) {
   if (!m || !m.date) return "";
+  if (m.time) {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: state.selectedTz, month: "short", day: "numeric",
+    }).format(fixtureToUTC(m));
+  }
   const [y, mo, d] = m.date.split("-").map(Number);
   if (!y || !mo || !d) return "";
   return new Date(Date.UTC(y, mo - 1, d))
