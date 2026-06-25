@@ -267,9 +267,9 @@ function renderPickCard(m, ko) {
     ? ` class="team-name team-info-link" data-team="${escapeHTML(name)}" title="View ${escapeHTML(name)} squad & team info"`
     : ` class="team-name" title="${escapeHTML(name)}"`;
   const teamsHTML = `<div class="match-teams">
-    <span class="team"><span class="flag">${f1}</span><span${nameAttrs(t1, t1Known)}>${t1}</span></span>
+    <span class="team"><span class="flag">${f1}</span><span${nameAttrs(t1, t1Known)}>${teamAbbr(t1)}</span></span>
     <span class="vs">VS</span>
-    <span class="team right"><span${nameAttrs(t2, t2Known)}>${t2}</span><span class="flag flag-right">${f2}</span></span>
+    <span class="team right"><span${nameAttrs(t2, t2Known)}>${teamAbbr(t2)}</span><span class="flag flag-right">${f2}</span></span>
   </div>`;
 
   const pick = getMatchPick(m) || {};
@@ -619,7 +619,7 @@ function openUserPredictionsModal(userId, userName) {
 
       tableHTML += `
         <tr class="upred-row ${rowClass}${isLive ? " upred-row-live" : ""}">
-          <td class="upred-td-match">${isLive ? '<span class="upred-live-dot" title="Live now">🔴</span> ' : ""}<span class="upred-team"><span class="flag">${flagFor(displayT1)}</span>${escapeHTML(displayT1)}</span> <span class="upred-vs">vs</span> <span class="upred-team"><span class="flag">${flagFor(displayT2)}</span>${escapeHTML(displayT2)}</span></td>
+          <td class="upred-td-match">${isLive ? '<span class="upred-live-dot" title="Live now">🔴</span> ' : ""}<span class="upred-team" title="${escapeHTML(displayT1)}"><span class="flag">${flagFor(displayT1)}</span>${escapeHTML(teamAbbr(displayT1))}</span> <span class="upred-vs">vs</span> <span class="upred-team" title="${escapeHTML(displayT2)}"><span class="flag">${flagFor(displayT2)}</span>${escapeHTML(teamAbbr(displayT2))}</span></td>
           <td class="upred-td-pick">${predCell}</td>
           <td class="upred-td-result">${resultCell}</td>
           <td class="upred-td-pts">${ptsCell}</td>

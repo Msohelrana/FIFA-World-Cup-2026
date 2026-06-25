@@ -32,9 +32,9 @@ function renderMatchCard(m, highlightTeam, ko) {
   const f1 = flagFor(displayTeam1);
   const f2 = flagFor(displayTeam2);
   const teamsHTML = `<div class="match-teams">
-    <span class="${t1Class}"><span class="flag">${f1}</span><span class="team-name" title="${displayTeam1}">${displayTeam1}</span></span>
+    <span class="${t1Class}"><span class="flag">${f1}</span><span class="team-name" title="${displayTeam1}">${teamAbbr(displayTeam1)}</span></span>
     <span class="vs">VS</span>
-    <span class="${t2Class}"><span class="team-name" title="${displayTeam2}">${displayTeam2}</span><span class="flag flag-right">${f2}</span></span>
+    <span class="${t2Class}"><span class="team-name" title="${displayTeam2}">${teamAbbr(displayTeam2)}</span><span class="flag flag-right">${f2}</span></span>
   </div>`;
 
   const r = getResult(m) || {};
