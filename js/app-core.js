@@ -405,6 +405,31 @@ function matchId(m) {
   return `${m.date}_${m.team1}_${m.team2}`;
 }
 
+// Official FIFA match number for a knockout fixture (group matches → null).
+// Keyed by FIFA's placeholder pair (NOT array order — FIFA's numbering doesn't
+// follow our fixture order). Source: FIFA calendar API MatchNumber field.
+const _FIFA_MATCH_NO = {
+  "2A|2B": 73, "1E|3ABCDF": 74, "1F|2C": 75, "1C|2F": 76, "1I|3CDFGH": 77, "2E|2I": 78,
+  "1A|3CEFHI": 79, "1L|3EHIJK": 80, "1D|3BEFIJ": 81, "1G|3AEHIJ": 82, "2K|2L": 83, "1H|2J": 84,
+  "1B|3EFGIJ": 85, "1J|2H": 86, "1K|3DEIJL": 87, "2D|2G": 88,
+  "W74|W77": 89, "W73|W75": 90, "W76|W78": 91, "W79|W80": 92,
+  "W83|W84": 93, "W81|W82": 94, "W86|W88": 95, "W85|W87": 96,
+  "W89|W90": 97, "W93|W94": 98, "W91|W92": 99, "W95|W96": 100,
+  "W97|W98": 101, "W99|W100": 102, "RU101|RU102": 103, "W101|W102": 104,
+};
+// Our fixture placeholder → FIFA placeholder code (C1 → 1C, 3rd A/B/C → 3ABC,
+// W73 / RU101 unchanged).
+function _toFifaCode(label) {
+  let m;
+  if ((m = /^([A-L])([12])$/.exec(label))) return m[2] + m[1];
+  if ((m = /^3rd ([A-Z/]+)$/.exec(label))) return "3" + m[1].replace(/\//g, "");
+  return label;
+}
+function matchNumber(m) {
+  if (m.stage === "group" || !m.stage) return null;
+  return _FIFA_MATCH_NO[`${_toFifaCode(m.team1)}|${_toFifaCode(m.team2)}`] ?? null;
+}
+
 function getResult(m) {
   const id = matchId(m);
   const manual = state.results[id];

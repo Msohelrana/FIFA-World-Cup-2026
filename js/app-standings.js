@@ -226,8 +226,8 @@ function renderBracket(ko) {
 
     const leftHalf = document.createElement("div");
     leftHalf.className = "bracket-half bracket-left";
-    leftHalf.appendChild(makeRound("Round of 32", allR32.slice(0, 8)));
-    leftHalf.appendChild(makeRound("Round of 16", allR16.slice(0, 4)));
+    leftHalf.appendChild(makeRound("R32", allR32.slice(0, 8)));
+    leftHalf.appendChild(makeRound("R16", allR16.slice(0, 4)));
     leftHalf.appendChild(makeRound("Quarterfinals", allQF.slice(0, 2)));
     leftHalf.appendChild(makeRound("Semifinals", allSF.slice(0, 1)));
 
@@ -246,8 +246,8 @@ function renderBracket(ko) {
     rightHalf.className = "bracket-half bracket-right";
     rightHalf.appendChild(makeRound("Semifinals", allSF.slice(1)));
     rightHalf.appendChild(makeRound("Quarterfinals", allQF.slice(2)));
-    rightHalf.appendChild(makeRound("Round of 16", allR16.slice(4)));
-    rightHalf.appendChild(makeRound("Round of 32", allR32.slice(8)));
+    rightHalf.appendChild(makeRound("R16", allR16.slice(4)));
+    rightHalf.appendChild(makeRound("R32", allR32.slice(8)));
 
     grid.appendChild(leftHalf);
     grid.appendChild(center);
@@ -257,7 +257,7 @@ function renderBracket(ko) {
     const bracket = document.createElement("div");
     bracket.className = "bracket";
     for (const [label, matches] of [
-      ["Round of 32", allR32], ["Round of 16", allR16],
+      ["R32", allR32], ["R16", allR16],
       ["Quarterfinals", allQF], ["Semifinals", allSF], ["Final", allFinal],
     ]) bracket.appendChild(makeRound(label, matches));
     wrap.appendChild(bracket);
@@ -300,9 +300,14 @@ function renderBracketMatch(m, ko) {
       <span class="bracket-score">${score === "" ? "" : score + pen}</span>
     </div>`;
 
+  const mn = matchNumber(m);
   card.innerHTML =
+    (mn ? `<button type="button" class="bracket-match-no" title="View match card">M${mn}</button>` : "") +
     row(t1, !!resolved1, s1, pen1, winner === t1, winner && winner !== t1, !resolved1) +
     row(t2, !!resolved2, s2, pen2, winner === t2, winner && winner !== t2, !resolved2);
+
+  const noBtn = card.querySelector(".bracket-match-no");
+  if (noBtn) noBtn.addEventListener("click", (e) => { e.stopPropagation(); openMatchCardModal(m); });
 
   return card;
 }

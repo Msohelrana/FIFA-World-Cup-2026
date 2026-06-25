@@ -399,6 +399,34 @@ html:has(body.modal-open) {
   animation: modalPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* Match-card popup (opened from a clickable bracket cell) */
+.match-card-modal {
+  max-width: 440px;
+  padding: 16px;
+  text-align: left;
+}
+.match-card-modal .mcm-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.match-card-modal .mcm-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+.match-card-modal .match-card {
+  margin: 0;
+}
+
 @keyframes modalPop {
   from {
     transform: translateY(8px) scale(0.94);

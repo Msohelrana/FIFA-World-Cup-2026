@@ -677,8 +677,8 @@ function renderPredictBracketSection() {
 
     const leftHalf = document.createElement("div");
     leftHalf.className = "bracket-half bracket-left";
-    leftHalf.appendChild(makeRound("Round of 32", allR32.slice(0, 8)));
-    leftHalf.appendChild(makeRound("Round of 16", allR16.slice(0, 4)));
+    leftHalf.appendChild(makeRound("R32", allR32.slice(0, 8)));
+    leftHalf.appendChild(makeRound("R16", allR16.slice(0, 4)));
     leftHalf.appendChild(makeRound("Quarterfinals", allQF.slice(0, 2)));
     leftHalf.appendChild(makeRound("Semifinals", allSF.slice(0, 1)));
 
@@ -694,8 +694,8 @@ function renderPredictBracketSection() {
     rightHalf.className = "bracket-half bracket-right";
     rightHalf.appendChild(makeRound("Semifinals", allSF.slice(1)));
     rightHalf.appendChild(makeRound("Quarterfinals", allQF.slice(2)));
-    rightHalf.appendChild(makeRound("Round of 16", allR16.slice(4)));
-    rightHalf.appendChild(makeRound("Round of 32", allR32.slice(8)));
+    rightHalf.appendChild(makeRound("R16", allR16.slice(4)));
+    rightHalf.appendChild(makeRound("R32", allR32.slice(8)));
 
     grid.appendChild(leftHalf);
     grid.appendChild(center);
@@ -705,7 +705,7 @@ function renderPredictBracketSection() {
     const bracket = document.createElement("div");
     bracket.className = "bracket predict-bracket";
     for (const [label, matches] of [
-      ["Round of 32", allR32], ["Round of 16", allR16],
+      ["R32", allR32], ["R16", allR16],
       ["Quarterfinals", allQF], ["Semifinals", allSF], ["Final", allFinal],
     ]) bracket.appendChild(makeRound(label, matches));
     scrollWrap.appendChild(bracket);
@@ -747,12 +747,14 @@ function renderPredictBracketMatch(m, predKo) {
       </div>`;
   };
 
-  const lockBadge = "";
-
+  const mn = matchNumber(m);
   card.innerHTML =
+    (mn ? `<button type="button" class="bracket-match-no" title="View match card">M${mn}</button>` : "") +
     row(team1, winner && winner === team1, winner && winner !== team1, !team1, 1) +
-    row(team2, winner && winner === team2, winner && winner !== team2, !team2, 2) +
-    lockBadge;
+    row(team2, winner && winner === team2, winner && winner !== team2, !team2, 2);
+
+  const noBtn = card.querySelector(".bracket-match-no");
+  if (noBtn) noBtn.addEventListener("click", (e) => { e.stopPropagation(); openMatchCardModal(m); });
 
   card.querySelectorAll(".predict-bracket-team.clickable").forEach(el => {
     const pickTeam = el.dataset.team;

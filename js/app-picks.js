@@ -232,7 +232,8 @@ function updatePicksBadge(ko) {
 }
 
 function renderPickCard(m, ko) {
-  const stageLabel = STAGE_LABELS[m.stage] + (m.group ? ` · Group ${m.group}` : "");
+  const _mn = matchNumber(m);
+  const stageLabel = STAGE_LABELS[m.stage] + (m.group ? ` · Group ${m.group}` : (_mn ? ` · M${_mn}` : ""));
   const card = document.createElement("article");
   card.className = "match-card pick-card";
 
@@ -383,8 +384,10 @@ function renderPickCard(m, ko) {
       // Update the verdict label inline (no full re-render → keeps input focus)
       label.textContent = pickResultLabel(m, next, t1, t2);
       label.classList.toggle("is-draw", nowDraw);
-      // If the draw state toggled on a KO match, the PK picker visibility changes — re-render this card
-      if (isKO && nowDraw !== wasDraw) renderPicks();
+      // If the draw state toggled on a KO match, the PK picker shows/hides —
+      // re-render ONLY this card (a full renderPicks() would reset the scroll
+      // position to the top).
+      if (isKO && nowDraw !== wasDraw) card.replaceWith(renderPickCard(m, ko));
     };
     i1.addEventListener("input", onChange);
     i2.addEventListener("input", onChange);
@@ -465,8 +468,8 @@ function openRulesModal() {
           <table class="rules-table">
             <tr><th>Stage</th><th>Multiplier</th></tr>
             <tr><td>Group Stage</td><td class="rules-pts">×1.0</td></tr>
-            <tr><td>Round of 32</td><td class="rules-pts">×1.1</td></tr>
-            <tr><td>Round of 16</td><td class="rules-pts">×1.25</td></tr>
+            <tr><td>R32</td><td class="rules-pts">×1.1</td></tr>
+            <tr><td>R16</td><td class="rules-pts">×1.25</td></tr>
             <tr><td>Quarterfinal</td><td class="rules-pts">×1.5</td></tr>
             <tr><td>Semifinal</td><td class="rules-pts">×2.0</td></tr>
             <tr><td>Third-Place Match</td><td class="rules-pts">×2.0</td></tr>
@@ -524,7 +527,7 @@ function openUserPredictionsModal(userId, userName) {
   const picks = userEntry ? userEntry.picks : {};
   const ko = getKnockoutAssignments();
 
-  const STAGE_LABELS_PRED = { group: "Group Stage", r32: "Round of 32", r16: "Round of 16", qf: "Quarter-finals", sf: "Semi-finals", third: "Third-Place Match", final: "Final" };
+  const STAGE_LABELS_PRED = { group: "Group Stage", r32: "R32", r16: "R16", qf: "Quarter-finals", sf: "Semi-finals", third: "Third-Place Match", final: "Final" };
   const stageOrder = ["group", "r32", "r16", "qf", "sf", "third", "final"];
 
   let totalPts = 0;

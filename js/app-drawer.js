@@ -386,21 +386,14 @@ function renderGoldenBootCard(rows) {
 // (which is chronological) to the order that visually pairs each match with its
 // two upstream feeders. Without this, FIFA's cross-bracket (where R16 M89 pulls
 // from R32 indices 2 and 5, not 0 and 1) makes the column alignment chaotic.
-// Visual top-to-bottom order of matches in each round so that every match sits
-// directly beside the two matches that feed it. Derived from the bracket wiring
-// in fixtures.js (the `bracket: {stage,index,role}` objects): walking down from
-// the Final, each parent at display position p expects its two feeder matches at
-// child positions 2p and 2p+1 (team1 feeder on top, team2 feeder below).
-//   sf  [0,1]                  ← final's two feeders
-//   qf  [0,1,2,3]              ← sf[0]←{qf0,qf1}, sf[1]←{qf2,qf3}
-//   r16 [0,1,4,5,2,3,6,7]      ← qf[0]←{r16 0,1}, qf[1]←{r16 4,5}, qf[2]←{r16 2,3}, qf[3]←{r16 6,7}
-//   r32 expands each r16 match into its two r32 feeders, in that same r16 order.
-// These are RAW indices into FIXTURES.filter(stage===…); they only reorder the
-// display — winner propagation uses the wiring indices directly, so the data is
-// unaffected. If the wiring in fixtures.js changes, re-derive these.
+// Visual top-to-bottom order per round, matching FIFA's official 2026 bracket
+// layout. Expressed as RAW indices into FIXTURES.filter(stage===…). With the
+// corrected wiring in fixtures.js, each parent at display position p sits beside
+// its two feeders at child positions 2p and 2p+1, so the columns line up AND the
+// match numbers read in FIFA's published order (R32: 74,77,73,75,…; R16: 89,90,…).
 const BRACKET_DISPLAY_ORDER = {
-  r32: [0, 2, 1, 4, 10, 11, 8, 9, 3, 5, 6, 7, 13, 15, 12, 14],
-  r16: [0, 1, 4, 5, 2, 3, 6, 7],
+  r32: [2, 5, 0, 3, 11, 10, 9, 8, 1, 4, 6, 7, 14, 13, 12, 15],
+  r16: [1, 0, 4, 5, 2, 3, 6, 7],
   qf:  [0, 1, 2, 3],
   sf:  [0, 1],
   final: [0],

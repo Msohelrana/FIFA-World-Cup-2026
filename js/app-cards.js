@@ -1,5 +1,6 @@
 function renderMatchCard(m, highlightTeam, ko) {
-  const stageLabel = STAGE_LABELS[m.stage] + (m.group ? ` · Group ${m.group}` : "");
+  const _mn = matchNumber(m);
+  const stageLabel = STAGE_LABELS[m.stage] + (m.group ? ` · Group ${m.group}` : (_mn ? ` · M${_mn}` : ""));
 
   const card = document.createElement("article");
   card.className = "match-card";
@@ -486,4 +487,30 @@ let _picksShowRecentFinished = false;
 let _picksShowUpcoming = false;
 const _prevLbRanks = new Map(); // userId → rank, persists between renders for animation
 let _lastMyExactCount = null;   // tracks own exact count to detect new exact scores
+
+// Pop a single match's full card in a modal (used by the clickable bracket cells).
+function openMatchCardModal(m) {
+  const existing = document.getElementById("matchCardModal");
+  if (existing) existing.remove();
+  const modal = document.createElement("div");
+  modal.id = "matchCardModal";
+  modal.className = "modal";
+  modal.innerHTML = `
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog match-card-modal" role="dialog" aria-modal="true" aria-label="Match details">
+      <button type="button" class="mcm-close" aria-label="Close">✕</button>
+      <div class="mcm-body"></div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.body.classList.add("modal-open");
+  modal.querySelector(".mcm-body").appendChild(renderMatchCard(m, null, getKnockoutAssignments()));
+  const close = () => {
+    modal.remove();
+    if (!document.querySelector(".modal")) document.body.classList.remove("modal-open");
+  };
+  modal.querySelector(".modal-backdrop").addEventListener("click", close);
+  modal.querySelector(".mcm-close").addEventListener("click", close);
+  modal.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  setTimeout(() => { const c = modal.querySelector(".mcm-close"); if (c) c.focus(); }, 50);
+}
 
