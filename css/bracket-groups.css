@@ -319,11 +319,12 @@
   font-weight: 800;
   font-size: 14px;
   line-height: 1.1;
+  color: var(--text);
 }
 
 .bracket-team.placeholder .bracket-team-name {
-  color: var(--text-dim);
-  font-weight: 600;
+  color: #c3c9e6;
+  font-weight: 700;
   font-style: italic;
   font-size: 12px;
 }
