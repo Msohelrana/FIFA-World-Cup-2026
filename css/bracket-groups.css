@@ -372,6 +372,8 @@ button.bracket-match-no:hover {
 
 .bracket-team.win {
   color: var(--gold);
+  background: rgba(255, 209, 102, 0.14);
+  border-radius: 10px;
 }
 
 .bracket-team.win .flag {
