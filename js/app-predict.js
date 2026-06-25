@@ -658,15 +658,7 @@ function renderPredictBracketSection() {
     return col;
   }
 
-  if (isMobileBracket()) {
-    // Mobile: vertically-folded bracket (rounds flow top → centre → bottom).
-    const thirdM = FIXTURES.find(m => m.stage === "third");
-    const canvas = buildFoldedBracket((m) => renderPredictBracketMatch(m, predKo), {
-      trophy: true, badges: true, bronze: thirdM || null,
-    });
-    scrollWrap.appendChild(canvas);
-    requestAnimationFrame(() => drawFoldedConnectors(canvas));
-  } else {
+  {
     const grid = document.createElement("div");
     grid.className = "bracket-two-sided";
 
@@ -698,8 +690,8 @@ function renderPredictBracketSection() {
     scrollWrap.appendChild(grid);
   }
 
-  // Third-place match (desktop only — the folded mobile layout puts it centre).
-  const thirdMatch = isMobileBracket() ? null : FIXTURES.find(m => m.stage === "third");
+  // Third-place match
+  const thirdMatch = FIXTURES.find(m => m.stage === "third");
   if (thirdMatch) {
     const thirdSection = document.createElement("div");
     thirdSection.className = "bracket-third";

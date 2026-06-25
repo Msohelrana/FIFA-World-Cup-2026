@@ -203,16 +203,7 @@ function renderBracket(ko) {
   const wrap = document.createElement("div");
   wrap.className = "bracket-scroll";
 
-  const mobile = isMobileBracket();
-  _bracketIsMobile = mobile;
-
-  if (mobile) {
-    // ── Mobile: vertically-folded bracket (rounds flow top → center → bottom) ──
-    const thirdM = FIXTURES.find(m => m.stage === "third");
-    wrap.appendChild(buildFoldedBracket((m) => renderBracketMatch(m, ko), {
-      trophy: true, badges: true, bronze: thirdM || null,
-    }));
-  } else {
+  {
     const grid = document.createElement("div");
     grid.className = "bracket-two-sided";
 
@@ -263,190 +254,24 @@ function renderBracket(ko) {
 
   els.bracketView.appendChild(wrap);
 
-  // Draw connector lines once the cards are laid out (both layouts).
-  requestAnimationFrame(() => {
-    if (mobile) {
-      const c = els.bracketView.querySelector(".bracket-vfold");
-      if (c) drawFoldedConnectors(c);
-    } else {
-      drawBracketConnectors();
-    }
-  });
+  // Draw the connector lines once the cards have been laid out. Redraw on
+  // resize so they stay aligned (the bracket scrolls horizontally on mobile).
+  requestAnimationFrame(drawBracketConnectors);
   if (!_bracketResizeBound) {
     _bracketResizeBound = true;
     let raf = 0;
     window.addEventListener("resize", () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        if (state.view !== "bracket" || els.bracketView.hidden) return;
-        // Switching across the mobile/desktop boundary rebuilds the whole layout.
-        if (isMobileBracket() !== _bracketIsMobile) { renderBracket(); return; }
-        if (_bracketIsMobile) {
-          const c = els.bracketView.querySelector(".bracket-vfold");
-          if (c) drawFoldedConnectors(c);
-        } else {
-          drawBracketConnectors();
-        }
+        if (state.view === "bracket" && !els.bracketView.hidden) drawBracketConnectors();
       });
     });
   }
 }
 
-function isMobileBracket() {
-  return window.matchMedia("(max-width: 700px)").matches;
-}
-
-// Build the mobile folded bracket: rounds flow top → center → bottom, with the
-// final, bronze final and champion trophy in the middle. cardFn(m) renders a
-// single match cell (so both the bracket tab and Table Predict can reuse this).
-function buildFoldedBracket(cardFn, opts) {
-  opts = opts || {};
-  const canvas = document.createElement("div");
-  canvas.className = "bracket-vfold";
-
-  const allR32 = getMatchesInBracketOrder("r32");
-  const allR16 = getMatchesInBracketOrder("r16");
-  const allQF  = getMatchesInBracketOrder("qf");
-  const allSF  = getMatchesInBracketOrder("sf");
-  const allFinal = getMatchesInBracketOrder("final");
-
-  const mkRow = (matches, key) => {
-    const r = document.createElement("div");
-    r.className = "bracket-vrow vr-" + key;
-    for (const m of matches) {
-      const cell = document.createElement("div");
-      cell.className = "bracket-vcell";
-      cell.appendChild(cardFn(m));
-      r.appendChild(cell);
-    }
-    canvas.appendChild(r);
-  };
-
-  // Top half flows down to the centre.
-  mkRow(allR32.slice(0, 8), "r32t");
-  mkRow(allR16.slice(0, 4), "r16t");
-  mkRow(allQF.slice(0, 2), "qft");
-  mkRow(allSF.slice(0, 1), "sft");
-
-  // Centre: bronze (left) · final (middle) · champion (right).
-  const center = document.createElement("div");
-  center.className = "bracket-vcenter";
-  if (opts.bronze) {
-    const bw = document.createElement("div");
-    bw.className = "bracket-center-match bracket-vbronze";
-    bw.appendChild(cardFn(opts.bronze));
-    if (opts.badges) bw.insertAdjacentHTML("beforeend", `<span class="bracket-badge badge-bronze">Bronze Final</span>`);
-    center.appendChild(bw);
-  } else {
-    center.appendChild(document.createElement("div")); // keep the grid column
-  }
-  for (const m of allFinal) {
-    const fw = document.createElement("div");
-    fw.className = "bracket-center-match bracket-vfinalcard";
-    fw.appendChild(cardFn(m));
-    if (opts.badges) fw.insertAdjacentHTML("beforeend", `<span class="bracket-badge badge-final">Final</span>`);
-    center.appendChild(fw);
-  }
-  if (opts.trophy) {
-    const tw = document.createElement("div");
-    tw.className = "bracket-trophy";
-    tw.innerHTML = `<div class="bracket-trophy-icon" aria-hidden="true">🏆</div><div class="bracket-trophy-label">Champion</div>`;
-    center.appendChild(tw);
-  } else {
-    center.appendChild(document.createElement("div"));
-  }
-  canvas.appendChild(center);
-
-  // Bottom half flows up to the centre.
-  mkRow(allSF.slice(1), "sfb");
-  mkRow(allQF.slice(2), "qfb");
-  mkRow(allR16.slice(4), "r16b");
-  mkRow(allR32.slice(8), "r32b");
-
-  return canvas;
-}
-
-// Vertical connector lines for the folded bracket. Uses offset geometry
-// (layout positions, unaffected by any transform) relative to the canvas.
-function drawFoldedConnectors(canvas) {
-  if (!canvas) return;
-  const old = canvas.querySelector(".bracket-conn-svg");
-  if (old) old.remove();
-  const W = canvas.offsetWidth, H = canvas.offsetHeight;
-  if (!W || !H) return;
-
-  const NS = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("class", "bracket-conn-svg");
-  svg.setAttribute("width", W);
-  svg.setAttribute("height", H);
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  svg.style.zIndex = "-1";
-
-  const line = (d) => {
-    const p = document.createElementNS(NS, "path");
-    p.setAttribute("d", d);
-    p.setAttribute("class", "bracket-conn-line");
-    svg.appendChild(p);
-  };
-  const g = (el) => ({
-    cx: el.offsetLeft + el.offsetWidth / 2,
-    top: el.offsetTop,
-    bottom: el.offsetTop + el.offsetHeight,
-  });
-  const cells = (key) => {
-    const row = canvas.querySelector(".vr-" + key);
-    return row ? Array.from(row.children) : [];
-  };
-  const joinDown = (up, down) => {
-    for (let k = 0; k < down.length; k++) {
-      if (!up[2 * k] || !up[2 * k + 1] || !down[k]) continue;
-      const a = g(up[2 * k]), b = g(up[2 * k + 1]), d = g(down[k]);
-      const midY = (Math.max(a.bottom, b.bottom) + d.top) / 2;
-      line(`M${a.cx},${a.bottom} V${midY}`);
-      line(`M${b.cx},${b.bottom} V${midY}`);
-      line(`M${a.cx},${midY} H${b.cx}`);
-      line(`M${d.cx},${midY} V${d.top}`);
-    }
-  };
-  const joinUp = (low, up) => {
-    for (let k = 0; k < up.length; k++) {
-      if (!low[2 * k] || !low[2 * k + 1] || !up[k]) continue;
-      const a = g(low[2 * k]), b = g(low[2 * k + 1]), u = g(up[k]);
-      const midY = (u.bottom + Math.min(a.top, b.top)) / 2;
-      line(`M${a.cx},${a.top} V${midY}`);
-      line(`M${b.cx},${b.top} V${midY}`);
-      line(`M${a.cx},${midY} H${b.cx}`);
-      line(`M${u.cx},${midY} V${u.bottom}`);
-    }
-  };
-
-  joinDown(cells("r32t"), cells("r16t"));
-  joinDown(cells("r16t"), cells("qft"));
-  joinDown(cells("qft"), cells("sft"));
-  joinUp(cells("qfb"), cells("sfb"));
-  joinUp(cells("r16b"), cells("qfb"));
-  joinUp(cells("r32b"), cells("r16b"));
-
-  // Semifinals into the central final.
-  const finalCell = canvas.querySelector(".bracket-vfinalcard");
-  const sft = cells("sft")[0], sfb = cells("sfb")[0];
-  if (finalCell && sft) {
-    const s = g(sft), f = g(finalCell), midY = (s.bottom + f.top) / 2;
-    line(`M${s.cx},${s.bottom} V${midY} H${f.cx} V${f.top}`);
-  }
-  if (finalCell && sfb) {
-    const s = g(sfb), f = g(finalCell), midY = (f.bottom + s.top) / 2;
-    line(`M${f.cx},${f.bottom} V${midY} H${s.cx} V${s.top}`);
-  }
-
-  canvas.insertBefore(svg, canvas.firstChild);
-}
-
 // SVG bracket connectors — drawn from measured card positions so they stay
 // correct in the mirrored two-sided layout.
 let _bracketResizeBound = false;
-let _bracketIsMobile = false;
 
 function drawBracketConnectors() {
   const grid = els.bracketView.querySelector(".bracket-two-sided, .bracket");
