@@ -38,7 +38,7 @@ const liveScores = (() => {
     "Congo DR": "DR Congo",
   };
 
-  const POLL_LIVE_MS = 45 * 1000;        // match actively in play
+  const POLL_LIVE_MS = 25 * 1000;        // match actively in play — snappy goal/scorer updates
   const POLL_PAUSE_MS = 90 * 1000;       // all live matches in HT or ET break
   const POLL_IDLE_MS = 10 * 60 * 1000;   // nothing live right now
   const TIMELINE_RECENT_MS = 4 * 36e5;   // fetch scorers for matches < 4h old
@@ -349,13 +349,11 @@ const liveScores = (() => {
   // consecutive confirmation before being applied (guards against stale-data
   // flicker while still allowing genuine VAR cancellations through).
   const pendingScoreDown = new Map();
-  let pollCount = 0;
 
   // One poll: calendar (cached), then timelines only for live matches +
   // recently-finished ones not yet cached.
   async function poll() {
     const now = Date.now();
-    const tlTick = (++pollCount) % 2 === 1; // timelines on every other poll
     const prevOverlay = new Map(overlay);
     let matches = (calMatches && now - calAt < CALENDAR_TTL_MS)
       ? calMatches
@@ -475,8 +473,10 @@ const liveScores = (() => {
       if (finished && cached && !Array.isArray(cached)) {
         if (cached.scorers && cached.scorers.length) rec.scorers = cached.scorers;
         if (cached.cards && cached.cards.length) rec.cards = cached.cards;
-      } else if (isLive && tl && (!tlTick && !scoreChanged || isPaused)) {
-        // off-tick or match paused (HT/ET break): reuse the last timeline parse
+      } else if (isLive && tl && isPaused) {
+        // Match paused (HT/ET break): no play, so reuse the last timeline parse.
+        // While actively live we fall through and refetch EVERY poll so a new
+        // scorer shows up as soon as FIFA's timeline lists it.
         if (tl.scorers.length) rec.scorers = tl.scorers;
         if (tl.cards.length) rec.cards = tl.cards;
       } else if (!isPaused && (isLive || (finished && now - kickoff < TIMELINE_RECENT_MS))) {

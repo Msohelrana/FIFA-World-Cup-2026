@@ -437,10 +437,22 @@ function getResult(m) {
   if (!live) return manual;
   if (live.isLive) return live;   // in play: the FIFA feed wins
   if (!manual) return live;       // no admin entry yet: show the API result
-  // Auto-archived API value (not a hand-entered score): the live/API feed stays
-  // authoritative so a score snapshotted early (e.g. 3-0) self-corrects to the
-  // real final (e.g. 5-0). Hand-typed admin entries below stay canonical.
-  if (manual.auto) return live;
+  // Auto-archived API value (not a hand-entered score): the live/API score stays
+  // authoritative so a value snapshotted early (e.g. 3-0) self-corrects to the
+  // real final (e.g. 5-0). BUT keep stored scorers/cards when the live feed
+  // doesn't have them — e.g. an admin used "Refresh scorers", or the match is too
+  // old for the overlay to refetch its timeline — otherwise they'd vanish.
+  if (manual.auto) {
+    const sameScore = Number(manual.score1) === Number(live.score1) &&
+                      Number(manual.score2) === Number(live.score2);
+    if (!sameScore) return live;
+    const merged = { ...live };
+    if ((!Array.isArray(live.scorers) || live.scorers.length === 0) &&
+        Array.isArray(manual.scorers) && manual.scorers.length > 0) merged.scorers = manual.scorers;
+    if ((!Array.isArray(live.cards) || live.cards.length === 0) &&
+        Array.isArray(manual.cards) && manual.cards.length > 0) merged.cards = manual.cards;
+    return merged;
+  }
   // Admin entry is canonical after FT; fill missing scorers/cards from the
   // API, but only when both agree on the score — otherwise the card would
   // contradict itself (e.g. a manual 0:0 showing the API's three scorers).
