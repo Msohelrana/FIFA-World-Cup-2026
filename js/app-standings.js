@@ -291,6 +291,107 @@ function renderBracket(ko) {
     thirdSection.appendChild(renderBracketMatch(thirdMatch, ko));
     els.bracketView.appendChild(thirdSection);
   }
+
+  // Draw the connector lines once the cards have been laid out.
+  requestAnimationFrame(drawBracketConnectors);
+  if (!_bracketResizeBound) {
+    _bracketResizeBound = true;
+    let raf = 0;
+    window.addEventListener("resize", () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (state.view === "bracket" && !els.bracketView.hidden) drawBracketConnectors();
+      });
+    });
+  }
+}
+
+// SVG bracket connectors — drawn from measured card positions so they stay
+// correct in both the one-sided and mirrored two-sided layouts.
+let _bracketResizeBound = false;
+
+function drawBracketConnectors() {
+  const grid = els.bracketView.querySelector(".bracket-two-sided, .bracket");
+  if (!grid) return;
+  const old = grid.querySelector(".bracket-conn-svg");
+  if (old) old.remove();
+
+  const gridRect = grid.getBoundingClientRect();
+  if (!gridRect.width || !gridRect.height) return; // hidden / not laid out yet
+
+  const NS = "http://www.w3.org/2000/svg";
+  const W = grid.scrollWidth, H = grid.scrollHeight;
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "bracket-conn-svg");
+  svg.setAttribute("width", W);
+  svg.setAttribute("height", H);
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+
+  const geom = (el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      left: r.left - gridRect.left,
+      right: r.right - gridRect.left,
+      cy: (r.top + r.bottom) / 2 - gridRect.top,
+    };
+  };
+  const line = (d) => {
+    const p = document.createElementNS(NS, "path");
+    p.setAttribute("d", d);
+    p.setAttribute("class", "bracket-conn-line");
+    svg.appendChild(p);
+  };
+  // Join two feeder cards to one target. side "right": target is right of feeders.
+  const join = (f1, f2, target, side) => {
+    if (!f1 || !f2 || !target) return;
+    const a = geom(f1), b = geom(f2), t = geom(target);
+    const x0 = side === "right" ? a.right : a.left;
+    const x1 = side === "right" ? t.left : t.right;
+    const mid = (x0 + x1) / 2;
+    line(`M${x0},${a.cy} H${mid}`);
+    line(`M${x0},${b.cy} H${mid}`);
+    line(`M${mid},${a.cy} V${b.cy}`);
+    line(`M${mid},${t.cy} H${x1}`);
+  };
+  const cardsOf = (round) => Array.from(round.querySelectorAll(".bracket-matches > .bracket-match"));
+
+  if (grid.classList.contains("bracket-two-sided")) {
+    const left = grid.querySelector(".bracket-left");
+    const right = grid.querySelector(".bracket-right");
+    const center = grid.querySelector(".bracket-center");
+    const leftRounds = left ? Array.from(left.querySelectorAll(":scope > .bracket-round")) : [];
+    const rightRounds = right ? Array.from(right.querySelectorAll(":scope > .bracket-round")) : [];
+
+    for (let i = 0; i < leftRounds.length - 1; i++) {
+      const f = cardsOf(leftRounds[i]), tg = cardsOf(leftRounds[i + 1]);
+      for (let k = 0; k < tg.length; k++) join(f[2 * k], f[2 * k + 1], tg[k], "right");
+    }
+    for (let i = rightRounds.length - 1; i > 0; i--) {
+      const f = cardsOf(rightRounds[i]), tg = cardsOf(rightRounds[i - 1]);
+      for (let k = 0; k < tg.length; k++) join(f[2 * k], f[2 * k + 1], tg[k], "left");
+    }
+
+    // Both semifinals feed the central final.
+    const finalCard = center ? center.querySelector(".bracket-center-match .bracket-match") : null;
+    const sfLeft = leftRounds.length ? cardsOf(leftRounds[leftRounds.length - 1])[0] : null;
+    const sfRight = rightRounds.length ? cardsOf(rightRounds[0])[0] : null;
+    if (finalCard && sfLeft) {
+      const s = geom(sfLeft), f = geom(finalCard), mid = (s.right + f.left) / 2;
+      line(`M${s.right},${s.cy} H${mid} V${f.cy} H${f.left}`);
+    }
+    if (finalCard && sfRight) {
+      const s = geom(sfRight), f = geom(finalCard), mid = (f.right + s.left) / 2;
+      line(`M${s.left},${s.cy} H${mid} V${f.cy} H${f.right}`);
+    }
+  } else {
+    const rounds = Array.from(grid.querySelectorAll(":scope > .bracket-round"));
+    for (let i = 0; i < rounds.length - 1; i++) {
+      const f = cardsOf(rounds[i]), tg = cardsOf(rounds[i + 1]);
+      for (let k = 0; k < tg.length; k++) join(f[2 * k], f[2 * k + 1], tg[k], "right");
+    }
+  }
+
+  grid.insertBefore(svg, grid.firstChild);
 }
 
 function renderBracketMatch(m, ko) {

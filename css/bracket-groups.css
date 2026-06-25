@@ -46,10 +46,11 @@
 
 .bracket {
   display: flex;
-  gap: 10px;
+  gap: 26px;
   width: 100%;
   min-width: 0;
   align-items: stretch;
+  position: relative;
 }
 
 /* Two-sided bracket: shrinks to fit the viewport — no horizontal scroll.
@@ -59,15 +60,37 @@
   align-items: stretch;
   width: 100%;
   min-width: 0;
-  gap: 3px;
+  gap: 8px;
+  position: relative;
 }
 
 .bracket-half {
   display: flex;
   flex: 1 1 0;
   min-width: 0;
-  gap: 3px;
+  gap: 16px;
   align-items: stretch;
+}
+
+/* Connector overlay — sits behind the cards; lines show in the gaps. */
+.bracket-conn-svg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: visible;
+}
+.bracket-conn-line {
+  fill: none;
+  stroke: var(--border);
+  stroke-width: 2;
+}
+.bracket-half,
+.bracket-center,
+.bracket-round {
+  position: relative;
+  z-index: 1;
 }
 
 .bracket-center {
