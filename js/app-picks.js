@@ -84,8 +84,8 @@ function renderPicks() {
   }
 
   const upcomingByDate = new Map();
-  const recentByDate   = new Map();
-  const oldByDate      = new Map();
+  const recentByDate = new Map();
+  const oldByDate = new Map();
 
   for (const m of FIXTURES) {
     if (liveIds.has(matchId(m))) continue;
@@ -94,8 +94,8 @@ function renderPicks() {
     const cd = formatCountdown(m);
     let bucket;
     if (cd.state === "ended" && now - kickoffMs >= TWENTY_FOUR_H) bucket = oldByDate;
-    else if (cd.state === "ended")                                  bucket = recentByDate;
-    else                                                            bucket = upcomingByDate;
+    else if (cd.state === "ended") bucket = recentByDate;
+    else bucket = upcomingByDate;
     if (!bucket.has(key)) bucket.set(key, []);
     bucket.get(key).push(m);
   }
@@ -797,7 +797,7 @@ function renderPicksLeaderboard() {
     const prevRank = _prevLbRanks.get(r.userId);
     const rankArrow = prevRank === undefined || prevRank === r.rank ? ""
       : prevRank > r.rank ? ' <span class="lb-arrow lb-arrow-up">▲</span>'
-      : ' <span class="lb-arrow lb-arrow-down">▼</span>';
+        : ' <span class="lb-arrow lb-arrow-down">▼</span>';
     return `
       <tr class="${isMe ? "is-me" : ""} ${rankClass}" data-uid="${escapeHTML(r.userId)}">
         <td class="lb-rank">${medal} ${r.rank}${rankArrow}</td>

@@ -1,10 +1,10 @@
 // ===== Scoring engine =====
 const STAGE_MULTIPLIERS = {
   group: 1.0,
-  r32:   1.1,
-  r16:   1.25,
-  qf:    1.5,
-  sf:    2.0,
+  r32: 1.1,
+  r16: 1.25,
+  qf: 1.5,
+  sf: 2.0,
   third: 2.0,
   final: 3.0,
 };
@@ -25,7 +25,8 @@ function scoreMatchPick(pick, result, m) {
     const pickWinner = pick.score1 > pick.score2 ? 1 : pick.score2 > pick.score1 ? 2 : 0;
     const actualWinner = result.score1 > result.score2 ? 1 : result.score2 > result.score1 ? 2 : 0;
     if (pickWinner === actualWinner) { basePoints += 5; outcome = true; }
-    if ((pick.score1 - pick.score2) === (result.score1 - result.score2)) { basePoints += 3; diff = true; }
+    let pickDiff = pick.score1 - pick.score2;
+    if (pickDiff != 0 && pickDiff === (result.score1 - result.score2)) { basePoints += 3; diff = true; }
   }
 
   // Penalty bonus: only when actual match went to PKs (KO + regulation tied + PKs entered)
