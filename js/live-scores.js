@@ -41,7 +41,7 @@ const liveScores = (() => {
   const POLL_LIVE_MS = 45 * 1000;        // match actively in play — snappy goal/scorer updates
   const POLL_PAUSE_MS = 90 * 1000;       // all live matches in HT or ET break
   const POLL_IDLE_MS = 10 * 60 * 1000;   // nothing live right now
-  const TIMELINE_RECENT_MS = 4 * 36e5;   // fetch scorers for matches < 4h old
+  const TIMELINE_RECENT_MS = 12 * 36e5;   // fetch scorers for matches < 4h old
   const KICKOFF_TOLERANCE_MS = 90 * 60 * 1000;
 
   // app matchId → {score1, score2, pen1, pen2, scorers, cards, isLive, matchTime}
